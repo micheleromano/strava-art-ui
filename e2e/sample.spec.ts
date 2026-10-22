@@ -23,11 +23,11 @@ test("someone without Strava can make and download art from the sample routes", 
 
   const png = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download PNG" }).click();
-  expect((await png).suggestedFilename()).toBe("strava-art.png");
+  expect((await png).suggestedFilename()).toBe("route-art.png");
 
   const svg = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download SVG" }).click();
-  expect((await svg).suggestedFilename()).toBe("strava-art.svg");
+  expect((await svg).suggestedFilename()).toBe("route-art.svg");
 });
 
 test("the sample opens on dates that have routes, even once it's out of date", async ({

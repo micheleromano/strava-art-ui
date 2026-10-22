@@ -63,7 +63,7 @@ import type { Route } from "./+types/studio";
 
 // Square downloads are this many pixels across; screen-shaped ones match the screen's pixels.
 const SQUARE_PNG_SIZE = 2048;
-const PNG_FILENAME = "strava-art.png";
+const PNG_FILENAME = "route-art.png";
 // The same trim the sample data gets, applied to people's own routes when they ask for it.
 const TRIM_METRES = 500;
 const MAX_GRID = 10;
@@ -535,7 +535,7 @@ export default function Studio({
               variant="secondary"
               isDisabled={paths.length === 0}
               onPress={() =>
-                svgRef.current && downloadSvg(svgRef.current, "strava-art.svg")
+                svgRef.current && downloadSvg(svgRef.current, "route-art.svg")
               }
             >
               {t("studio.downloadSvg")}

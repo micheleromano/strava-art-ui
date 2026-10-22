@@ -73,7 +73,7 @@ test.describe("on an iPhone", () => {
     await expect(
       page.getByText(/If you saved it to Photos, open it there, tap Share/),
     ).toBeVisible();
-    expect(await shared(page)).toEqual(["strava-art.png image/png"]);
+    expect(await shared(page)).toEqual(["route-art.png image/png"]);
   });
 
   test("closing the share menu without choosing anything shows nothing", async ({
@@ -102,6 +102,6 @@ test.describe("on an iPhone", () => {
     ).toBeVisible();
     await share.click();
     await expect(page.getByText("Shared", { exact: true })).toBeVisible();
-    expect(await shared(page)).toEqual(["strava-art.png image/png"]);
+    expect(await shared(page)).toEqual(["route-art.png image/png"]);
   });
 });

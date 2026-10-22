@@ -1,7 +1,8 @@
 {
   "app": {
-    "name": "Strava Art",
-    "description": "Turn the routes from your Strava activities into a picture you can download."
+    "name": "Route Art",
+    "description": "Turn the routes from your Strava activities into a picture you can download.",
+    "poweredBy": "Powered by Strava"
   },
   "home": {
     "sample": {
