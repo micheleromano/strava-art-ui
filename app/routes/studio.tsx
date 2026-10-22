@@ -3,11 +3,12 @@ import {
   Button,
   buttonVariants,
   parseColor,
+  Checkbox,
   Spinner,
   Switch,
 } from "@heroui/react";
 import { getLocalTimeZone, today } from "@internationalized/date";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
@@ -26,10 +27,18 @@ import { DateRangeControl } from "~/components/date-range-control";
 import { LayoutPicker } from "~/components/layout-picker";
 import { PalettePicker } from "~/components/palette-picker";
 import { RouteArt } from "~/components/route-art";
+import { RouteList } from "~/components/route-list";
 import { SliderControl } from "~/components/slider-control";
 import { contrastRatio, MIN_GRAPHIC_CONTRAST } from "~/lib/contrast";
 import { inRange, rangeFromParams, type DayRange } from "~/lib/date-range";
-import { downloadPng, downloadSvg } from "~/lib/download";
+import {
+  canSharePng,
+  downloadPng,
+  downloadSvg,
+  makePng,
+  sharePng,
+} from "~/lib/download";
+import { platformFrom } from "~/lib/platform";
 import {
   loadActivities,
   refreshActivities,
@@ -37,8 +46,10 @@ import {
 } from "~/lib/load-activities";
 import {
   decodeRoutes,
+  frameFor,
   LAYOUTS,
   layoutRoutes,
+  SQUARE,
   type Layout,
 } from "~/lib/layouts";
 import { PALETTES } from "~/lib/palettes";
@@ -49,7 +60,9 @@ import i18n from "~/i18n";
 
 import type { Route } from "./+types/studio";
 
-const PNG_SIZE = 2048;
+// Square downloads are this many pixels across; screen-shaped ones match the screen's pixels.
+const SQUARE_PNG_SIZE = 2048;
+const PNG_FILENAME = "strava-art.png";
 // The same trim the sample data gets, applied to people's own routes when they ask for it.
 const TRIM_METRES = 500;
 const MAX_GRID = 10;
@@ -117,9 +130,9 @@ export default function Studio({
   const { activities, connected, source } = loaderData;
   const navigation = useNavigation();
   const refreshing = navigation.state !== "idle" && navigation.formData != null;
-  const [pngState, setPngState] = useState<"idle" | "pending" | "failed">(
-    "idle",
-  );
+  const [pngState, setPngState] = useState<
+    "idle" | "downloading" | "sharing" | "saved" | "failed" | "shareFailed"
+  >("idle");
   const [searchParams, setSearchParams] = useSearchParams();
   const [background, setBackground] = useState(
     parseColor(PALETTES[0].background),
@@ -130,6 +143,19 @@ export default function Studio({
   const [zoom, setZoom] = useState(1);
   const [strokeWidth, setStrokeWidth] = useState(2);
   const [spacing, setSpacing] = useState(0.15);
+  const [rotations, setRotations] = useState<Record<number, number>>({});
+  const [rotatingId, setRotatingId] = useState<number | null>(null);
+  const [hidden, setHidden] = useState<ReadonlySet<number>>(new Set());
+  const [matchScreen, setMatchScreen] = useState(false);
+  // This page only renders in the browser (see clientLoader), so the screen is known.
+  const { width: screenWidth, height: screenHeight } = window.screen;
+  const pixelRatio = window.devicePixelRatio;
+  const canShare = useMemo(() => canSharePng(), []);
+  const platform = platformFrom(navigator.userAgent, navigator.maxTouchPoints);
+  const frame = useMemo(
+    () => (matchScreen ? frameFor(screenWidth, screenHeight) : SQUARE),
+    [matchScreen, screenWidth, screenHeight],
+  );
   const svgRef = useRef<SVGSVGElement>(null);
 
   // What's drawn lives in the URL, so a link brings back the same picture; the look stays on the page.
@@ -142,23 +168,73 @@ export default function Studio({
   const rows = gridSizeFrom(searchParams.get("rows"));
 
   // Decoding routes is the slow part, so it only reruns when the activities or dates change.
-  const { routes, skipped } = useMemo(() => {
-    const shown = inRange(
-      activities,
-      rangeFromParams(from, to, timeZone, activities),
-      timeZone,
-    ).sort((a, b) => b.startDate.localeCompare(a.startDate));
-    // The sample is already trimmed; people's own routes are trimmed here if they choose.
-    const routes = decodeRoutes(
-      shown.map((activity) => activity.polyline),
-      source === "strava" && hideEnds ? TRIM_METRES : 0,
+  const { drawable, skipped } = useMemo(() => {
+    const inDates = new Set(
+      inRange(
+        activities,
+        rangeFromParams(from, to, timeZone, activities),
+        timeZone,
+      ),
     );
-    return { routes, skipped: shown.length - routes.length };
+    const dateFormat = new Intl.DateTimeFormat(i18n.language, {
+      dateStyle: "medium",
+      timeZone,
+    });
+    // An activity's position in the loaded list identifies it, e.g. to keep its rotation.
+    const shown = activities
+      .map((activity, id) => ({ activity, id }))
+      .filter(({ activity }) => inDates.has(activity))
+      .sort((a, b) => b.activity.startDate.localeCompare(a.activity.startDate));
+    const drawable = shown.flatMap(({ activity, id }) => {
+      // The sample is already trimmed; people's own routes are trimmed here if they choose.
+      const [route] = decodeRoutes(
+        [activity.polyline],
+        source === "strava" && hideEnds ? TRIM_METRES : 0,
+      );
+      const date = dateFormat.format(new Date(activity.startDate));
+      return route ? [{ id, label: date, route }] : [];
+    });
+    return { drawable, skipped: shown.length - drawable.length };
   }, [activities, from, to, timeZone, source, hideEnds]);
+  const included = useMemo(
+    () => drawable.filter(({ id }) => !hidden.has(id)),
+    [drawable, hidden],
+  );
 
   const paths = useMemo(
-    () => layoutRoutes(routes, { layout, zoom, columns, rows, spacing }),
-    [routes, layout, zoom, columns, rows, spacing],
+    () =>
+      layoutRoutes(
+        included.map(({ route }) => route),
+        { layout, frame, zoom, columns, rows, spacing },
+        included.map(({ id }) => rotations[id] ?? 0),
+      ),
+    [included, layout, frame, zoom, columns, rows, spacing, rotations],
+  );
+
+  // Stable callbacks, so the route list only redraws the row that changed.
+  const showRoute = useCallback(
+    (id: number, shown: boolean) =>
+      setHidden((current) => {
+        const next = new Set(current);
+        if (shown) next.delete(id);
+        else next.add(id);
+        return next;
+      }),
+    [],
+  );
+  const showAllRoutes = useCallback(
+    (shown: boolean) =>
+      setHidden((current) =>
+        shown
+          ? new Set()
+          : new Set([...current, ...drawable.map(({ id }) => id)]),
+      ),
+    [drawable],
+  );
+  const rotateRoute = useCallback(
+    (id: number, degrees: number) =>
+      setRotations((current) => ({ ...current, [id]: degrees })),
+    [],
   );
 
   // Lowercase to match the palettes; Color writes hex in uppercase.
@@ -185,13 +261,31 @@ export default function Studio({
   const changeRange = (next: DayRange) =>
     setParams({ from: next.start.toString(), to: next.end.toString() });
 
-  const savePng = async (svg: SVGSVGElement) => {
-    setPngState("pending");
+  const exportPng = async (svg: SVGSVGElement, how: "download" | "share") => {
+    setPngState(how === "download" ? "downloading" : "sharing");
+    let png: Blob;
     try {
-      await downloadPng(svg, "strava-art.png", PNG_SIZE);
-      setPngState("idle");
+      png = matchScreen
+        ? await makePng(
+            svg,
+            Math.round(screenWidth * pixelRatio),
+            Math.round(screenHeight * pixelRatio),
+          )
+        : await makePng(svg, SQUARE_PNG_SIZE, SQUARE_PNG_SIZE);
     } catch {
       setPngState("failed");
+      return;
+    }
+    if (how === "download") {
+      downloadPng(png, PNG_FILENAME);
+      setPngState("saved");
+      return;
+    }
+    try {
+      // Closing the share menu without choosing anything isn't an error.
+      setPngState((await sharePng(png, PNG_FILENAME)) ? "saved" : "idle");
+    } catch {
+      setPngState("shareFailed");
     }
   };
 
@@ -228,6 +322,19 @@ export default function Studio({
             value={layout}
             onChange={(next) => setParams({ layout: next })}
           />
+
+          <Checkbox isSelected={matchScreen} onChange={setMatchScreen}>
+            <Checkbox.Content>
+              {/* A border keeps the unticked box visible on light backgrounds. */}
+              <Checkbox.Control className="border border-foreground/50">
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              {t("studio.matchScreen", {
+                width: Math.round(screenWidth * pixelRatio),
+                height: Math.round(screenHeight * pixelRatio),
+              })}
+            </Checkbox.Content>
+          </Checkbox>
 
           {source === "strava" && (
             <div className="flex flex-col gap-2">
@@ -285,9 +392,8 @@ export default function Studio({
           <SliderControl
             label={t("studio.thickness")}
             value={strokeWidth}
-            minValue={0.5}
-            maxValue={8}
-            step={0.5}
+            minValue={1}
+            maxValue={10}
             onChange={setStrokeWidth}
           />
 
@@ -297,6 +403,19 @@ export default function Studio({
             maxValue={today(timeZone)}
             onChange={changeRange}
           />
+
+          {drawable.length > 0 && (
+            <RouteList
+              routes={drawable}
+              hidden={hidden}
+              rotations={rotations}
+              rotatingId={rotatingId}
+              onShow={showRoute}
+              onShowAll={showAllRoutes}
+              onRotatingChange={setRotatingId}
+              onRotate={rotateRoute}
+            />
+          )}
 
           <PalettePicker
             background={backgroundHex}
@@ -341,13 +460,20 @@ export default function Studio({
 
           <div aria-live="polite" className="flex flex-col gap-1 text-sm">
             <p>
-              {paths.length < routes.length
+              {paths.length < included.length
                 ? t("studio.gridShown", {
                     count: paths.length,
-                    total: routes.length,
+                    total: included.length,
                   })
                 : t("studio.shown", { count: paths.length })}
             </p>
+            {drawable.length > included.length && (
+              <p className="text-muted">
+                {t("studio.hiddenCount", {
+                  count: drawable.length - included.length,
+                })}
+              </p>
+            )}
             {skipped > 0 && (
               <p className="text-muted">
                 {t("studio.skipped", { count: skipped })}
@@ -358,11 +484,25 @@ export default function Studio({
           <div className="flex flex-wrap gap-2">
             <Button
               isDisabled={paths.length === 0}
-              isPending={pngState === "pending"}
-              onPress={() => svgRef.current && savePng(svgRef.current)}
+              isPending={pngState === "downloading"}
+              onPress={() =>
+                svgRef.current && exportPng(svgRef.current, "download")
+              }
             >
               {t("studio.downloadPng")}
             </Button>
+            {canShare && (
+              <Button
+                variant="secondary"
+                isDisabled={paths.length === 0}
+                isPending={pngState === "sharing"}
+                onPress={() =>
+                  svgRef.current && exportPng(svgRef.current, "share")
+                }
+              >
+                {t("studio.sharePng")}
+              </Button>
+            )}
             <Button
               variant="secondary"
               isDisabled={paths.length === 0}
@@ -374,11 +514,27 @@ export default function Studio({
             </Button>
           </div>
 
-          {pngState === "failed" && (
+          {(pngState === "failed" || pngState === "shareFailed") && (
             <Alert status="danger">
               <Alert.Indicator />
               <Alert.Content>
-                <Alert.Description>{t("studio.pngFailed")}</Alert.Description>
+                <Alert.Description>
+                  {pngState === "failed"
+                    ? t("studio.pngFailed")
+                    : t("studio.shareFailed")}
+                </Alert.Description>
+              </Alert.Content>
+            </Alert>
+          )}
+
+          {pngState === "saved" && (
+            <Alert status="accent">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>{t("studio.wallpaper.title")}</Alert.Title>
+                <Alert.Description>
+                  {t(`studio.wallpaper.${platform}`)}
+                </Alert.Description>
               </Alert.Content>
             </Alert>
           )}
@@ -412,7 +568,8 @@ export default function Studio({
             <p className="rounded-lg border border-border p-8 text-center text-muted">
               {emptyMessage(t, {
                 activities: activities.length,
-                routes: routes.length,
+                routes: drawable.length,
+                included: included.length,
                 skipped,
               })}
             </p>
@@ -420,6 +577,7 @@ export default function Studio({
             <RouteArt
               ref={svgRef}
               paths={paths}
+              frame={frame}
               colours={colours}
               background={backgroundHex}
               strokeWidth={strokeWidth}
@@ -437,10 +595,12 @@ function emptyMessage(
   counts: {
     activities: number;
     routes: number;
+    included: number;
     skipped: number;
   },
 ): string {
   if (counts.activities === 0) return t("studio.noActivities");
+  if (counts.routes > 0 && counts.included === 0) return t("studio.allHidden");
   if (counts.routes === 0 && counts.skipped > 0) return t("studio.noMaps");
   return t("studio.empty");
 }

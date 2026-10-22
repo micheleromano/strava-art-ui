@@ -2,17 +2,30 @@ import polyline from "@mapbox/polyline";
 
 import { trimEnds } from "./trim-ends";
 
+/** The picture's short side, in drawing units; the long side scales to match its shape. */
 export const ART_SIZE = 1000;
 const PADDING = 40;
 const METRES_PER_DEGREE = 111_320;
 
 // Neither layout shows where routes really are, so the app only ever needs their shapes.
-export const LAYOUTS = ["start", "grid"] as const;
+export const LAYOUTS = ["start", "grid", "chain"] as const;
 export type Layout = (typeof LAYOUTS)[number];
+
+export type Frame = { width: number; height: number };
+
+export const SQUARE: Frame = { width: ART_SIZE, height: ART_SIZE };
+
+/** A frame with the proportions of a `width` × `height` screen, its short side ART_SIZE. */
+export function frameFor(width: number, height: number): Frame {
+  return width >= height
+    ? { width: Math.round((ART_SIZE * width) / height), height: ART_SIZE }
+    : { width: ART_SIZE, height: Math.round((ART_SIZE * height) / width) };
+}
 
 export type LayoutOptions = {
   layout: Layout;
-  /** Same start: 1 fits most routes; higher zooms in. */
+  frame: Frame;
+  /** Same start and chain: 1 fits the picture; higher zooms in. */
   zoom: number;
   columns: number;
   rows: number;
@@ -47,23 +60,37 @@ export function decodeRoutes(encoded: string[], trimMetres = 0): Route[] {
 export function layoutRoutes(
   routes: Route[],
   options: LayoutOptions,
+  /** Degrees clockwise for each route, in the order of `routes`; missing means 0. */
+  rotations: number[] = [],
 ): string[] {
-  return place(routes, options).map((points) => toPath(clipToPicture(points)));
+  const shapes = routes.map((route, index) =>
+    rotate(toMetres(route, route[0]), rotations[index] ?? 0),
+  );
+  return place(shapes, options).map((points) =>
+    toPath(clipToPicture(points, options.frame)),
+  );
 }
 
-function place(routes: Route[], options: LayoutOptions): Point[][] {
-  if (routes.length === 0) return [];
+function place(shapes: Point[][], options: LayoutOptions): Point[][] {
+  if (shapes.length === 0) return [];
   switch (options.layout) {
     case "start":
-      return sameStart(routes, options.zoom);
+      return sameStart(shapes, options.frame, options.zoom);
     case "grid":
-      return grid(routes, options.columns, options.rows, options.spacing);
+      return grid(
+        shapes,
+        options.frame,
+        options.columns,
+        options.rows,
+        options.spacing,
+      );
+    case "chain":
+      return chain(shapes, options.frame, options.zoom);
   }
 }
 
 /** Every route begins at the centre, all at one scale, so longer routes reach further. */
-function sameStart(routes: Route[], zoom: number): Point[][] {
-  const local = routes.map((route) => toMetres(route, route[0]));
+function sameStart(local: Point[][], frame: Frame, zoom: number): Point[][] {
   // Fit most routes rather than the single longest, which would shrink everything else.
   const reach = percentile(
     local.map((points) =>
@@ -74,24 +101,26 @@ function sameStart(routes: Route[], zoom: number): Point[][] {
     ),
     0.9,
   );
-  const scale = ((ART_SIZE / 2 - PADDING) / Math.max(reach, 1)) * zoom;
-  const centre = ART_SIZE / 2;
+  // Fits the short side, so routes reach the same way in every direction.
+  const radius = Math.min(frame.width, frame.height) / 2 - PADDING;
+  const scale = (radius / Math.max(reach, 1)) * zoom;
+  const [centreX, centreY] = [frame.width / 2, frame.height / 2];
   return local.map((points) =>
-    points.map(([x, y]): Point => [centre + x * scale, centre + y * scale]),
+    points.map(([x, y]): Point => [centreX + x * scale, centreY + y * scale]),
   );
 }
 
 /** The first `columns` × `rows` routes, each scaled to fill its own cell. */
 function grid(
-  routes: Route[],
+  shapes: Point[][],
+  frame: Frame,
   columns: number,
   rows: number,
   spacing: number,
 ): Point[][] {
-  const cellWidth = ART_SIZE / columns;
-  const cellHeight = ART_SIZE / rows;
-  return routes.slice(0, columns * rows).map((route, index) => {
-    const points = toMetres(route, route[0]);
+  const cellWidth = frame.width / columns;
+  const cellHeight = frame.height / rows;
+  return shapes.slice(0, columns * rows).map((points, index) => {
     const box = bounds(points);
     const scale = Math.min(
       (cellWidth * (1 - spacing)) / Math.max(box.width, 1),
@@ -118,6 +147,71 @@ function toMetres(route: Route, [lat0, lng0]: [number, number]): Point[] {
   ]);
 }
 
+// Chain: the angles tried for each route, every 15°.
+const CHAIN_ANGLES = Array.from({ length: 24 }, (_, index) => index * 15);
+
+type Box = { minX: number; minY: number; maxX: number; maxY: number };
+
+/**
+ * Routes joined end to start, oldest first. Each is turned to whichever angle keeps
+ * the chain most compact so far, then the whole chain is scaled to fill the picture.
+ */
+function chain(shapes: Point[][], frame: Frame, zoom: number): Point[][] {
+  const placed: Point[][] = new Array(shapes.length);
+  let end: Point = [0, 0];
+  let box: Box | null = null;
+  // Shapes arrive newest first; the chain runs oldest first.
+  for (let index = shapes.length - 1; index >= 0; index--) {
+    let best: { points: Point[]; box: Box; size: number } | null = null;
+    for (const angle of CHAIN_ANGLES) {
+      const points = rotate(shapes[index], angle).map(([x, y]): Point => [
+        x + end[0],
+        y + end[1],
+      ]);
+      const own = bounds(points);
+      const grown: Box = box
+        ? {
+            minX: Math.min(box.minX, own.minX),
+            minY: Math.min(box.minY, own.minY),
+            maxX: Math.max(box.maxX, own.maxX),
+            maxY: Math.max(box.maxY, own.maxY),
+          }
+        : own;
+      // Relative to the frame, so a wide picture favours a wide chain.
+      const size = Math.max(
+        (grown.maxX - grown.minX) / frame.width,
+        (grown.maxY - grown.minY) / frame.height,
+      );
+      if (!best || size < best.size) best = { points, box: grown, size };
+    }
+    placed[index] = best!.points;
+    box = best!.box;
+    end = best!.points[best!.points.length - 1];
+  }
+
+  const { minX, minY, maxX, maxY } = box!;
+  const scale =
+    Math.min(
+      (frame.width - 2 * PADDING) / Math.max(maxX - minX, 1),
+      (frame.height - 2 * PADDING) / Math.max(maxY - minY, 1),
+    ) * zoom;
+  const [centreX, centreY] = [(minX + maxX) / 2, (minY + maxY) / 2];
+  return placed.map((points) =>
+    points.map(([x, y]): Point => [
+      frame.width / 2 + (x - centreX) * scale,
+      frame.height / 2 + (y - centreY) * scale,
+    ]),
+  );
+}
+
+/** Turns a shape clockwise around its start (0, 0); y points down, as on screen. */
+function rotate(points: Point[], degrees: number): Point[] {
+  if (degrees % 360 === 0) return points;
+  const radians = (degrees * Math.PI) / 180;
+  const [cos, sin] = [Math.cos(radians), Math.sin(radians)];
+  return points.map(([x, y]): Point => [x * cos - y * sin, x * sin + y * cos]);
+}
+
 // Loops rather than Math.min(...points): spreading very long routes can overflow the stack.
 function bounds(points: Point[]) {
   let [minX, minY, maxX, maxY] = [Infinity, Infinity, -Infinity, -Infinity];
@@ -131,10 +225,10 @@ function bounds(points: Point[]) {
 }
 
 /** The parts of a line inside the picture, as separate runs where it leaves and comes back. */
-function clipToPicture(points: Point[]): Point[][] {
+function clipToPicture(points: Point[], frame: Frame): Point[][] {
   const runs: Point[][] = [];
   for (let i = 1; i < points.length; i++) {
-    const segment = clipSegment(points[i - 1], points[i]);
+    const segment = clipSegment(points[i - 1], points[i], frame);
     if (!segment) continue;
     const run = runs.at(-1);
     const last = run?.at(-1);
@@ -148,14 +242,14 @@ function clipToPicture(points: Point[]): Point[][] {
 }
 
 /** Liang–Barsky: the part of the segment from `a` to `b` inside the picture, if any. */
-function clipSegment(a: Point, b: Point): [Point, Point] | null {
+function clipSegment(a: Point, b: Point, frame: Frame): [Point, Point] | null {
   const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
   let [enter, exit] = [0, 1];
   const edges: [number, number][] = [
     [-dx, a[0]],
-    [dx, ART_SIZE - a[0]],
+    [dx, frame.width - a[0]],
     [-dy, a[1]],
-    [dy, ART_SIZE - a[1]],
+    [dy, frame.height - a[1]],
   ];
   for (const [p, q] of edges) {
     if (p === 0) {

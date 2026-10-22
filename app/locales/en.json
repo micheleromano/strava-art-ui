@@ -6,7 +6,7 @@
   "home": {
     "sample": {
       "title": "Try it with sample routes",
-      "body": "Use a set of the creator's own routes. No sign-in needed.",
+      "body": "Use a set of sample routes. No sign-in needed.",
       "action": "Use sample routes"
     },
     "connect": {
@@ -69,14 +69,18 @@
       "start_one": "1 route drawn from the middle of the picture.",
       "start_other": "{{count}} routes drawn from the same starting point, spreading out from the centre.",
       "grid_one": "1 route drawn in a grid.",
-      "grid_other": "{{count}} routes drawn in a grid, one per square."
+      "grid_other": "{{count}} routes drawn in a grid, one per square.",
+      "chain_one": "1 route drawn on its own.",
+      "chain_other": "{{count}} routes joined end to end, each starting where the one before it finished."
     },
     "layout": {
       "label": "Layout",
       "start": "Same starting point",
       "grid": "Grid",
       "startHelp": "Every route starts in the middle and spreads out from there.",
-      "gridHelp": "One route per square, newest first, each as big as its square."
+      "gridHelp": "One route per square, newest first, each as big as its square.",
+      "chain": "End to end",
+      "chainHelp": "Each route starts where the one before it finished, oldest first, turned so they all fit."
     },
     "thickness": "Line thickness",
     "columns": "Columns",
@@ -99,10 +103,37 @@
     "hideEnds": "Hide where each route starts and finishes (the first and last 500 metres)",
     "privacy": {
       "start": "Every route starts in the middle, so the lines around it show where you usually set off from.",
-      "grid": "Each route is shown on its own, but someone who knows the area may recognise its shape."
+      "grid": "Each route is shown on its own, but someone who knows the area may recognise its shape.",
+      "chain": "Routes are joined end to end, so where they start is hidden, but someone who knows the area may recognise their shapes."
     },
     "gridShown": "Showing the latest {{count}} of {{total}} routes in these dates.",
-    "noMaps": "None of the activities in these dates have a map, so there's nothing to draw."
+    "noMaps": "None of the activities in these dates have a map, so there's nothing to draw.",
+    "routes": {
+      "toggle_one": "Choose and rotate the route",
+      "toggle_other": "Choose and rotate routes ({{count}})",
+      "help": "Untick a route to leave it out of the picture. In a grid, the next route takes its square.",
+      "list": "Routes in these dates, newest first",
+      "showAll": "Show all",
+      "hideAll": "Hide all",
+      "rotate": "Rotate",
+      "rotateOne": "Rotate the route from {{route}}",
+      "angle": "Rotation for the route from {{route}}",
+      "turned": "Turned {{degrees}}°"
+    },
+    "hiddenCount_one": "You've hidden 1 route.",
+    "hiddenCount_other": "You've hidden {{count}} routes.",
+    "allHidden": "You've hidden every route in these dates. Tick some in the list to show them.",
+    "matchScreen": "Match my screen's shape, for a wallpaper ({{width}} × {{height}} pixels)",
+    "sharePng": "Share or save to Photos",
+    "shareFailed": "We couldn't open the share menu. Try Download PNG instead.",
+    "wallpaper": {
+      "title": "Use it as your wallpaper",
+      "mac": "Find it in your Downloads folder, right-click it and choose Set Desktop Picture.",
+      "windows": "Open your Downloads folder, right-click it and choose Set as desktop background.",
+      "ios": "Open it in Photos, tap the Share button and choose Use as Wallpaper. If it went to the Files app instead, use Share or save to Photos above.",
+      "android": "Open it in your photos or files app, then choose Set as wallpaper from the menu.",
+      "other": "Open your downloads, then use your computer's option to set a picture as the desktop background."
+    }
   },
   "errors": {
     "notFound": "We couldn't find that page.",
