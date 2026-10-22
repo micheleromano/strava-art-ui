@@ -1,0 +1,26 @@
+[
+  {
+    "start_date": "2026-09-02T06:30:00Z",
+    "map": {
+      "summary_polyline": "oqeiHopaMuNvAiH|F{AvKmApOwFhR}JtSqGtSfAhRlLpOzPvKxM|FdIvAdIwAxM}FzPwKlLqOfAiRqGuS}JuSwFiRmAqO{AwKiH}FuNwA"
+    },
+    "start_date_local": "2026-09-02T06:30:00Z",
+    "visibility": "everyone"
+  },
+  {
+    "start_date": "2026-09-05T07:10:00Z",
+    "map": {
+      "summary_polyline": "gdfiHoibMuNvAiH|F{AvKmApOwFhR}JtSqGtSfAhRlLpOzPvKxM|FdIvAdIwAxM}FzPwKlLqOfAiRqGuS}JuSwFiRmAqO{AwKiH}FuNwA"
+    },
+    "start_date_local": "2026-09-05T07:10:00Z",
+    "visibility": "everyone"
+  },
+  {
+    "start_date": "2026-09-09T17:45:00Z",
+    "map": {
+      "summary_polyline": "_wfiHobcMuNvAiH|F{AvKmApOwFhR}JtSqGtSfAhRlLpOzPvKxM|FdIvAdIwAxM}FzPwKlLqOfAiRqGuS}JuSwFiRmAqO{AwKiH}FuNwA"
+    },
+    "start_date_local": "2026-09-09T17:45:00Z",
+    "visibility": "everyone"
+  }
+]

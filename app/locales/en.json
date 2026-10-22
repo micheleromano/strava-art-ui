@@ -1,0 +1,112 @@
+{
+  "app": {
+    "name": "Strava Art",
+    "description": "Turn the routes from your Strava activities into a picture you can download."
+  },
+  "home": {
+    "sample": {
+      "title": "Try it with sample routes",
+      "body": "Use a set of the creator's own routes. No sign-in needed.",
+      "action": "Use sample routes"
+    },
+    "connect": {
+      "title": "Use your own routes",
+      "body": "Connect your Strava account to make art from your activities.",
+      "permission": "Strava will ask you to allow access to your activities. You can choose whether to include private ones.",
+      "storage": "We keep only each activity's date and route line, and only in this browser. They pass through our server on the way, but we don't store them there.",
+      "disconnect": "You can disconnect at any time. That removes your activities from this browser and withdraws our access on Strava.",
+      "action": "Connect with Strava",
+      "cookie": "A sign-in cookie keeps you connected until you close your browser."
+    },
+    "connected": {
+      "title": "Your Strava is connected",
+      "body": "Your activities are ready to use.",
+      "action": "Open your routes"
+    },
+    "errors": {
+      "denied": "You didn't give permission, so nothing was connected. You can try again whenever you like.",
+      "scope": "To make art from your routes, we need permission to read your activities. Please try again and allow access to your activities.",
+      "failed": "Something went wrong connecting to Strava. Please try again.",
+      "expired": "Your Strava connection has ended, so we've removed your activities from this browser. Connect again to keep going.",
+      "revoke": "You're disconnected here, but we couldn't remove this app from your Strava account. You can remove it yourself in your Strava settings, under My Apps."
+    }
+  },
+  "studio": {
+    "title": "Your routes",
+    "home": "Home",
+    "disconnect": "Disconnect Strava",
+    "refresh": "Get latest activities from Strava",
+    "loading": "Loading your activities…",
+    "sample": {
+      "title": "Sample routes",
+      "body": "These are some of the creator's public activities. Only the day of each one is kept, and the first and last 500 metres of each route are removed."
+    },
+    "dates": "Dates",
+    "background": "Background colour",
+    "line": "Line colour",
+    "colourArea": "{{name}}: saturation and brightness",
+    "hue": "{{name}}: hue",
+    "hex": "{{name}}: hex code",
+    "shown_one": "{{count}} activity shown.",
+    "shown_other": "{{count}} activities shown.",
+    "skipped_one": "{{count}} activity in these dates has no map, so it isn't drawn.",
+    "skipped_other": "{{count}} activities in these dates have no map, so they aren't drawn.",
+    "empty": "No routes in these dates. Try a wider range.",
+    "lowContrast": "These two colours are hard to tell apart, so the routes may be hard to see.",
+    "downloadSvg": "Download SVG",
+    "downloadPng": "Download PNG",
+    "errors": {
+      "title": "We couldn't load your activities",
+      "failed": "Something went wrong talking to Strava. Please try again.",
+      "retry": "Try again",
+      "busy_one": "Too many requests to Strava right now. Please try again in 1 minute.",
+      "busy_other": "Too many requests to Strava right now. Please try again in {{count}} minutes.",
+      "busyLater": "Too many requests to Strava right now. Please try again in a few minutes."
+    },
+    "noActivities": "There are no activities in your Strava account yet.",
+    "pngFailed": "We couldn't make the PNG. Try downloading the SVG instead.",
+    "artLabel": {
+      "start_one": "1 route drawn from the middle of the picture.",
+      "start_other": "{{count}} routes drawn from the same starting point, spreading out from the centre.",
+      "grid_one": "1 route drawn in a grid.",
+      "grid_other": "{{count}} routes drawn in a grid, one per square."
+    },
+    "layout": {
+      "label": "Layout",
+      "start": "Same starting point",
+      "grid": "Grid",
+      "startHelp": "Every route starts in the middle and spreads out from there.",
+      "gridHelp": "One route per square, newest first, each as big as its square."
+    },
+    "thickness": "Line thickness",
+    "columns": "Columns",
+    "rows": "Rows",
+    "spacing": "Space around each route",
+    "shades": "Use shades of the line colour",
+    "palettes": {
+      "label": "Colour combinations",
+      "midnight": "Midnight",
+      "paper": "Paper",
+      "forest": "Forest",
+      "ocean": "Ocean",
+      "dusk": "Dusk",
+      "blush": "Blush",
+      "chalk": "Chalk",
+      "ink": "Ink"
+    },
+    "zoom": "Zoom",
+    "shadesHelp": "Newest routes are lightest, oldest are darkest.",
+    "hideEnds": "Hide where each route starts and finishes (the first and last 500 metres)",
+    "privacy": {
+      "start": "Every route starts in the middle, so the lines around it show where you usually set off from.",
+      "grid": "Each route is shown on its own, but someone who knows the area may recognise its shape."
+    },
+    "gridShown": "Showing the latest {{count}} of {{total}} routes in these dates.",
+    "noMaps": "None of the activities in these dates have a map, so there's nothing to draw."
+  },
+  "errors": {
+    "notFound": "We couldn't find that page.",
+    "unexpected": "Something went wrong. Please try again.",
+    "home": "Go to the home page"
+  }
+}

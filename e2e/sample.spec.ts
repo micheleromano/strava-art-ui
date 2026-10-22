@@ -1,0 +1,84 @@
+import { expect, test } from "@playwright/test";
+
+// The fixture sample activities are all in September 2026.
+const SEPTEMBER = "from=2026-09-01&to=2026-09-30";
+
+test("someone without Strava can make and download art from the sample routes", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Use sample routes" }).click();
+  await expect(page.getByText("Sample routes", { exact: true })).toBeVisible();
+
+  await page.goto(`/studio?source=sample&${SEPTEMBER}`);
+  await expect(page.getByText("5 activities shown.")).toBeVisible();
+  await expect(
+    page.getByText("1 activity in these dates has no map"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("img", {
+      name: /^5 routes drawn from the same starting point/,
+    }),
+  ).toBeVisible();
+
+  const png = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download PNG" }).click();
+  expect((await png).suggestedFilename()).toBe("strava-art.png");
+
+  const svg = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download SVG" }).click();
+  expect((await svg).suggestedFilename()).toBe("strava-art.svg");
+});
+
+test("the sample opens on dates that have routes, even once it's out of date", async ({
+  page,
+}) => {
+  // The fixture is from September 2026, so "the last 30 days" may well be empty.
+  await page.goto("/studio?source=sample");
+  await expect(page.getByText("5 activities shown.")).toBeVisible();
+});
+
+test("dates with no activities say so instead of showing an empty picture", async ({
+  page,
+}) => {
+  await page.goto("/studio?source=sample&from=2020-01-01&to=2020-01-31");
+  await expect(
+    page.getByText("No routes in these dates. Try a wider range."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Download PNG" }),
+  ).toBeDisabled();
+});
+
+test("each layout draws the routes and downloads what's on screen", async ({
+  page,
+}) => {
+  await page.goto(`/studio?source=sample&${SEPTEMBER}`);
+
+  await page.getByRole("radio", { name: "Grid" }).click();
+  await expect(
+    page.getByRole("img", {
+      name: "5 routes drawn in a grid, one per square.",
+    }),
+  ).toBeVisible();
+  await page.goto(
+    `/studio?source=sample&${SEPTEMBER}&layout=grid&columns=2&rows=2`,
+  );
+  await expect(
+    page.getByText("Showing the latest 4 of 5 routes in these dates."),
+  ).toBeVisible();
+
+  await page.getByRole("radio", { name: "Paper" }).click();
+  const svg = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download SVG" }).click();
+  const markup = await (await svg).createReadStream().then(
+    (stream) =>
+      new Promise<string>((resolve) => {
+        let text = "";
+        stream.on("data", (chunk) => (text += chunk));
+        stream.on("end", () => resolve(text));
+      }),
+  );
+  expect(markup).toContain('fill="#f5f0e6"');
+  expect(markup.match(/<path /g)).toHaveLength(4);
+});

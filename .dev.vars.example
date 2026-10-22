@@ -1,0 +1,6 @@
+# Copy to .dev.vars and fill in. .dev.vars is gitignored: never commit real values.
+# Client ID and secret: https://www.strava.com/settings/api
+STRAVA_CLIENT_ID=
+STRAVA_CLIENT_SECRET=
+# Any long random string, e.g. from `openssl rand -base64 32`
+SESSION_SECRET=

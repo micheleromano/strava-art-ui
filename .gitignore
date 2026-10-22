@@ -1,0 +1,29 @@
+.DS_Store
+.env
+.env.*
+/node_modules/
+*.tsbuildinfo
+
+# React Router
+/.react-router/
+/build/
+
+# Cloudflare
+.mf
+.wrangler/
+.dev.vars*
+worker-configuration.d.ts
+
+!.dev.vars.example
+!.env.example
+
+# Tests
+/test-results/
+/playwright-report/
+
+# Local, personal
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Owner's Strava activities used as sample data (personal location data)
+app/data/demo-activities.json

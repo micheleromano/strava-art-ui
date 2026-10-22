@@ -1,0 +1,35 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ *
+ * Secrets (STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, SESSION_SECRET) are not set here:
+ * locally they live in .dev.vars (see .dev.vars.example), in production in `wrangler secret put`.
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "strava-art-ui",
+  "compatibility_date": "2026-10-19",
+  "main": "./workers/app.ts",
+  "vars": {
+    "STRAVA_BASE_URL": "https://www.strava.com",
+  },
+  "observability": {
+    "enabled": true,
+  },
+  "upload_source_maps": true,
+  "env": {
+    /**
+     * End-to-end tests only: points at the mock Strava in e2e/mock-strava.ts.
+     * These values are fake and safe to commit. Never deploy this env: its
+     * SESSION_SECRET is public, so anyone could forge session cookies.
+     */
+    "e2e": {
+      "vars": {
+        "STRAVA_BASE_URL": "http://localhost:8790",
+        "STRAVA_CLIENT_ID": "e2e-client-id",
+        "STRAVA_CLIENT_SECRET": "e2e-client-secret",
+        "SESSION_SECRET": "e2e-session-secret",
+      },
+    },
+  },
+}
