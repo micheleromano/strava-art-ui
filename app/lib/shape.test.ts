@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import polyline from "@mapbox/polyline";
 
-import { decodeRoutes, layoutRoutes } from "./layouts";
+import { decodeRoutes, layoutRoutes, SQUARE } from "./layouts";
 import { toShape } from "./shape";
 
 // A square-ish loop in London: 1 km north, then 1 km east (0.0144° of longitude at 51.5°N).
@@ -20,6 +20,7 @@ describe("toShape", () => {
   it("draws exactly like the real route", () => {
     const options = {
       layout: "grid" as const,
+      frame: SQUARE,
       zoom: 1,
       columns: 1,
       rows: 1,

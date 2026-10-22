@@ -4,13 +4,16 @@ import { describe, expect, it } from "vitest";
 import {
   ART_SIZE,
   decodeRoutes,
+  frameFor,
   layoutRoutes,
+  SQUARE,
   type LayoutOptions,
   type Route,
 } from "./layouts";
 
 const options: LayoutOptions = {
   layout: "start",
+  frame: SQUARE,
   zoom: 1,
   columns: 2,
   rows: 2,
@@ -81,6 +84,141 @@ describe("same start", () => {
       expect(x).toBeLessThanOrEqual(ART_SIZE);
       expect(y).toBeGreaterThanOrEqual(0);
       expect(y).toBeLessThanOrEqual(ART_SIZE);
+    }
+  });
+});
+
+describe("rotation", () => {
+  // Heads due north from its start.
+  const north: Route = [
+    [51.5, -0.1],
+    [51.51, -0.1],
+  ];
+
+  it("turns a route clockwise around its start", () => {
+    const [[startX, startY], [endX, endY]] = points(
+      layoutRoutes([north], options, [90])[0],
+    );
+    expect([startX, startY]).toEqual([ART_SIZE / 2, ART_SIZE / 2]);
+    // North turned 90° clockwise points east: right of the start, level with it.
+    expect(endX).toBeGreaterThan(startX);
+    expect(endY).toBeCloseTo(startY, 0);
+  });
+
+  it("only turns the routes it's given an angle for", () => {
+    const [turned, unturned] = layoutRoutes([north, north], options, [180]);
+    expect(points(turned)[1][1]).toBeGreaterThan(ART_SIZE / 2);
+    expect(points(unturned)[1][1]).toBeLessThan(ART_SIZE / 2);
+  });
+
+  it("refits a turned route to its grid square", () => {
+    const grid = { ...options, layout: "grid" as const };
+    const [[x1, y1], [x2, y2]] = points(layoutRoutes([north], grid, [90])[0]);
+    // Now horizontal, it spans the square's width (90% of 500) instead of its height.
+    expect(Math.abs(x2 - x1)).toBeCloseTo(450, 0);
+    expect(y2).toBeCloseTo(y1, 0);
+  });
+});
+
+describe("chain", () => {
+  const chain = { ...options, layout: "chain" as const };
+  // Ten identical routes heading 1 km north: joined in a straight line they'd be tiny.
+  const north: Route = [
+    [51.5, -0.1],
+    [51.505, -0.1],
+    [51.509, -0.1],
+  ];
+  const routes = Array.from({ length: 10 }, () => north);
+
+  it("starts each route where the one before it finished, oldest first", () => {
+    const drawn = layoutRoutes(routes, chain).map(points);
+    // Routes arrive newest first, so each route continues from the next one in the list.
+    for (let i = 0; i < drawn.length - 1; i++) {
+      const newerStart = drawn[i][0];
+      const olderEnd = drawn[i + 1].at(-1)!;
+      expect(newerStart[0]).toBeCloseTo(olderEnd[0], 0);
+      expect(newerStart[1]).toBeCloseTo(olderEnd[1], 0);
+    }
+  });
+
+  it("turns routes so the chain stays compact and each route stays large", () => {
+    for (const path of layoutRoutes(routes, chain).map(points)) {
+      const [[x1, y1], [x2, y2]] = [path[0], path.at(-1)!];
+      // A straight chain of ten would make each route under 100 across.
+      expect(Math.hypot(x2 - x1, y2 - y1)).toBeGreaterThan(300);
+    }
+  });
+
+  it("keeps the whole chain inside the picture", () => {
+    for (const [x, y] of layoutRoutes(routes, chain).flatMap(points)) {
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThanOrEqual(ART_SIZE);
+      expect(y).toBeGreaterThanOrEqual(0);
+      expect(y).toBeLessThanOrEqual(ART_SIZE);
+    }
+  });
+});
+
+describe("screen-shaped frames", () => {
+  const wide = frameFor(1920, 1080);
+  const tall = frameFor(1170, 2532);
+  const routes = [london, paris, london, paris];
+
+  it("keeps the short side and stretches the long side to the screen's proportions", () => {
+    expect(wide).toEqual({ width: 1778, height: ART_SIZE });
+    expect(tall).toEqual({ width: ART_SIZE, height: 2164 });
+  });
+
+  const inside = (drawn: number[][]) => {
+    for (const [x, y] of drawn) {
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThanOrEqual(wide.width);
+      expect(y).toBeGreaterThanOrEqual(0);
+      expect(y).toBeLessThanOrEqual(wide.height);
+    }
+  };
+
+  it("starts every route at the middle of a wide picture", () => {
+    const drawn = layoutRoutes(routes, { ...options, frame: wide }).map(points);
+    inside(drawn.flat());
+    for (const route of drawn) {
+      expect(route[0]).toEqual([wide.width / 2, wide.height / 2]);
+    }
+  });
+
+  it("spreads grid cells across the whole width of a wide picture", () => {
+    const [, second] = layoutRoutes(routes, {
+      ...options,
+      layout: "grid",
+      frame: wide,
+    }).map(points);
+    inside(second);
+    // 2 columns of 889: the second route sits in the right-hand cell.
+    for (const [x] of second) expect(x).toBeGreaterThanOrEqual(wide.width / 2);
+  });
+
+  it("centres the chain in a wide picture", () => {
+    const drawn = layoutRoutes(routes, {
+      ...options,
+      layout: "chain",
+      frame: wide,
+    }).flatMap(points);
+    inside(drawn);
+    const xs = drawn.map(([x]) => x);
+    const middle = (Math.min(...xs) + Math.max(...xs)) / 2;
+    expect(middle).toBeCloseTo(wide.width / 2, 0);
+  });
+
+  it("splits a tall picture into taller grid cells", () => {
+    const [, second] = layoutRoutes(routes, {
+      ...options,
+      layout: "grid",
+      frame: tall,
+    }).map(points);
+    // With 2 × 2 cells, the second route sits in the top-right cell: x ≥ 500, y < 1082.
+    for (const [x, y] of second) {
+      expect(x).toBeGreaterThanOrEqual(ART_SIZE / 2);
+      expect(y).toBeLessThanOrEqual(tall.height / 2);
     }
   });
 });

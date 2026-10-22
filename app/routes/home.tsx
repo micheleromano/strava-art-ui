@@ -1,4 +1,5 @@
 import { Alert, Button, buttonVariants, Card } from "@heroui/react";
+import type { ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 import { Form, Link } from "react-router";
 
@@ -10,6 +11,9 @@ import i18n from "~/i18n";
 import type { Route } from "./+types/home";
 
 const ERRORS = ["denied", "scope", "failed", "expired", "revoke"] as const;
+
+// Card titles are h3 by default; these sit directly under the page's h1, so they're h2.
+const asHeading2 = (props: ComponentProps<"h2">) => <h2 {...props} />;
 type HomeError = (typeof ERRORS)[number];
 
 export function meta() {
@@ -54,7 +58,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         {connected ? (
           <Card>
             <Card.Header>
-              <Card.Title>{t("home.connected.title")}</Card.Title>
+              <Card.Title render={asHeading2}>
+                {t("home.connected.title")}
+              </Card.Title>
               <Card.Description>{t("home.connected.body")}</Card.Description>
             </Card.Header>
             <Card.Footer className="flex flex-wrap gap-2">
@@ -71,7 +77,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         ) : (
           <Card>
             <Card.Header>
-              <Card.Title>{t("home.connect.title")}</Card.Title>
+              <Card.Title render={asHeading2}>
+                {t("home.connect.title")}
+              </Card.Title>
               <Card.Description>{t("home.connect.body")}</Card.Description>
             </Card.Header>
             <Card.Content>
@@ -94,7 +102,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         {hasSample && (
           <Card>
             <Card.Header>
-              <Card.Title>{t("home.sample.title")}</Card.Title>
+              <Card.Title render={asHeading2}>
+                {t("home.sample.title")}
+              </Card.Title>
               <Card.Description>{t("home.sample.body")}</Card.Description>
             </Card.Header>
             <Card.Footer>

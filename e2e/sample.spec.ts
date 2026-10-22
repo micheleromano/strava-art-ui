@@ -82,3 +82,86 @@ test("each layout draws the routes and downloads what's on screen", async ({
   expect(markup).toContain('fill="#f5f0e6"');
   expect(markup.match(/<path /g)).toHaveLength(4);
 });
+
+test("someone can rotate a route, and leave routes out of the picture", async ({
+  page,
+}) => {
+  await page.goto(`/studio?source=sample&${SEPTEMBER}&layout=grid`);
+  const art = page.getByRole("img", { name: /drawn in a grid/ });
+  const firstPath = () => art.locator("path").first().getAttribute("d");
+  const before = await firstPath();
+
+  await page
+    .getByRole("button", { name: "Choose and rotate routes (5)" })
+    .click();
+  const list = page.getByRole("list", {
+    name: "Routes in these dates, newest first",
+  });
+  await list
+    .getByRole("button", { name: /^Rotate the route from/ })
+    .first()
+    .click();
+  const angle = page.getByRole("slider", {
+    name: /Rotation for the route from/,
+  });
+  await angle.focus();
+  for (let i = 0; i < 90; i++) await angle.press("ArrowRight");
+  await expect(page.getByText("Turned 90°")).toBeVisible();
+  expect(await firstPath()).not.toBe(before);
+
+  // Click the visible label, as a person would; the real input is visually hidden.
+  const second = list.getByRole("listitem").nth(1);
+  await second.locator("label").click();
+  await expect(second.getByRole("checkbox")).not.toBeChecked();
+  await expect(page.getByText("You've hidden 1 route.")).toBeVisible();
+  await expect(art.locator("path")).toHaveCount(4);
+
+  await page.getByRole("button", { name: "Hide all" }).click();
+  await expect(
+    page.getByText("You've hidden every route in these dates."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Show all" }).click();
+  await expect(page.getByText("5 activities shown.")).toBeVisible();
+});
+
+test("routes can be joined end to end", async ({ page }) => {
+  await page.goto(`/studio?source=sample&${SEPTEMBER}`);
+  await page.getByRole("radio", { name: "End to end" }).click();
+  await expect(
+    page.getByRole("img", { name: /^5 routes joined end to end/ }),
+  ).toBeVisible();
+  await expect(page.getByRole("slider", { name: "Zoom" })).toBeVisible();
+});
+
+test.describe("on a 1600 × 900 screen", () => {
+  test.use({
+    screen: { width: 1600, height: 900 },
+    viewport: { width: 1280, height: 800 },
+  });
+
+  test("the picture can match the screen's shape, for a wallpaper", async ({
+    page,
+  }) => {
+    await page.goto(`/studio?source=sample&${SEPTEMBER}`);
+    const art = page.getByRole("img", { name: /same starting point/ });
+    await expect(art).toHaveAttribute("viewBox", "0 0 1000 1000");
+
+    await page
+      .getByText("Match my screen's shape, for a wallpaper (1600 × 900 pixels)")
+      .click();
+    await expect(art).toHaveAttribute("viewBox", "0 0 1778 1000");
+
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download PNG" }).click();
+    const png = await (await download).createReadStream().then(
+      (stream) =>
+        new Promise<Buffer>((resolve) => {
+          const chunks: Buffer[] = [];
+          stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+          stream.on("end", () => resolve(Buffer.concat(chunks)));
+        }),
+    );
+    // A PNG's width and height are stored at bytes 16–23.
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1600, 900]);
+  });
+});
