@@ -104,7 +104,7 @@
     "privacy": {
       "start": "Every route starts in the middle, so the lines around it show where you usually set off from.",
       "grid": "Each route is shown on its own, but someone who knows the area may recognise its shape.",
-      "chain": "Routes are joined end to end, so where they start is hidden, but someone who knows the area may recognise their shapes."
+      "chain": "Joining routes end to end hides where most of them start, but someone who knows the area may recognise their shapes."
     },
     "gridShown": "Showing the latest {{count}} of {{total}} routes in these dates.",
     "noMaps": "None of the activities in these dates have a map, so there's nothing to draw.",
@@ -118,21 +118,35 @@
       "rotate": "Rotate",
       "rotateOne": "Rotate the route from {{route}}",
       "angle": "Rotation for the route from {{route}}",
-      "turned": "Turned {{degrees}}°"
+      "turned": "Turned {{degrees}}°",
+      "sameDay": "{{date}} ({{position}} of {{count}})",
+      "turnBack": "Turn back to 0°"
     },
     "hiddenCount_one": "You've hidden 1 route.",
     "hiddenCount_other": "You've hidden {{count}} routes.",
     "allHidden": "You've hidden every route in these dates. Tick some in the list to show them.",
-    "matchScreen": "Match my screen's shape, for a wallpaper ({{width}} × {{height}} pixels)",
-    "sharePng": "Share or save to Photos",
+    "matchScreen": "Fit my screen, for a wallpaper",
+    "sharePng": "Share or save picture",
     "shareFailed": "We couldn't open the share menu. Try Download PNG instead.",
     "wallpaper": {
-      "title": "Use it as your wallpaper",
-      "mac": "Find it in your Downloads folder, right-click it and choose Set Desktop Picture.",
-      "windows": "Open your Downloads folder, right-click it and choose Set as desktop background.",
-      "ios": "Open it in Photos, tap the Share button and choose Use as Wallpaper. If it went to the Files app instead, use Share or save to Photos above.",
-      "android": "Open it in your photos or files app, then choose Set as wallpaper from the menu.",
-      "other": "Open your downloads, then use your computer's option to set a picture as the desktop background."
+      "mac": "To use it as your wallpaper, find it in your Downloads folder, Control-click or right-click it, and choose Set Desktop Picture.",
+      "windows": "To use it as your wallpaper, open your Downloads folder, right-click it (or press and hold), and choose Set as desktop background.",
+      "ios": "On iPhone and iPad, downloads go to the Files app. To use it as your wallpaper, use Share or save picture instead and choose Save Image.",
+      "android": "To use it as your wallpaper, open it from your downloads or photos, and choose Set as wallpaper. The wording varies between phones.",
+      "other": "To use it as your wallpaper, open your downloads and use your computer's option to set a picture as the desktop background.",
+      "shared": {
+        "ios": "If you saved it to Photos, open it there, tap Share, and choose Use as Wallpaper.",
+        "android": "If you saved it to your photos, open it there and choose Set as wallpaper. The wording varies between phones."
+      },
+      "squareHint": "This picture is square, so your screen may crop it. Tick Fit my screen for one that fits exactly."
+    },
+    "matchScreenSize": "The PNG will be {{width}} × {{height}} pixels.",
+    "shareNote": "Anyone you send the picture to can see the shapes of your routes.",
+    "exported": {
+      "making": "Making your picture…",
+      "downloaded": "Download started",
+      "shared": "Shared",
+      "shareReady": "Your picture is ready. Tap Share or save picture again to open the share menu."
     }
   },
   "errors": {
