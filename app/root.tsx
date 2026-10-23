@@ -42,7 +42,33 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  const { t } = useTranslation();
+  return (
+    <>
+      <Outlet />
+      {/*
+        Strava's official "Powered by Strava" logo, unmodified. Its brand guidelines require it
+        to be apart from, and no more prominent than, the app's own name, so it's small and
+        at the foot of every page. Black on light backgrounds, white on dark.
+      */}
+      <footer className="container mx-auto flex justify-center p-4 pb-8">
+        <img
+          src="/strava/api_logo_pwrdBy_strava_horiz_black.svg"
+          alt={t("app.poweredBy")}
+          width={148}
+          height={15}
+          className="dark:hidden"
+        />
+        <img
+          src="/strava/api_logo_pwrdBy_strava_horiz_white.svg"
+          alt={t("app.poweredBy")}
+          width={148}
+          height={15}
+          className="hidden dark:block"
+        />
+      </footer>
+    </>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

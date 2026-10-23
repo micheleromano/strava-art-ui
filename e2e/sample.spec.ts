@@ -23,11 +23,11 @@ test("someone without Strava can make and download art from the sample routes", 
 
   const png = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download PNG" }).click();
-  expect((await png).suggestedFilename()).toBe("strava-art.png");
+  expect((await png).suggestedFilename()).toBe("route-art.png");
 
   const svg = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download SVG" }).click();
-  expect((await svg).suggestedFilename()).toBe("strava-art.svg");
+  expect((await svg).suggestedFilename()).toBe("route-art.svg");
 });
 
 test("the sample opens on dates that have routes, even once it's out of date", async ({
@@ -116,7 +116,11 @@ test("someone can rotate a route, and leave routes out of the picture", async ({
   await expect(page.getByText("You've hidden 1 route.")).toBeVisible();
   await expect(art.locator("path")).toHaveCount(4);
 
-  await page.getByRole("button", { name: "Hide all" }).click();
+  // Keyboard focus stays on the button after pressing it.
+  const hideAll = page.getByRole("button", { name: "Hide all" });
+  await hideAll.focus();
+  await page.keyboard.press("Enter");
+  await expect(hideAll).toBeFocused();
   await expect(
     page.getByText("You've hidden every route in these dates."),
   ).toBeVisible();
@@ -146,9 +150,10 @@ test.describe("on a 1600 × 900 screen", () => {
     const art = page.getByRole("img", { name: /same starting point/ });
     await expect(art).toHaveAttribute("viewBox", "0 0 1000 1000");
 
-    await page
-      .getByText("Match my screen's shape, for a wallpaper (1600 × 900 pixels)")
-      .click();
+    await page.getByText("Fit my screen, for a wallpaper").click();
+    await expect(
+      page.getByText("The PNG will be 1600 × 900 pixels."),
+    ).toBeVisible();
     await expect(art).toHaveAttribute("viewBox", "0 0 1778 1000");
 
     const download = page.waitForEvent("download");

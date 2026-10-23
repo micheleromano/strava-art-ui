@@ -7,20 +7,22 @@ import { ART_SIZE, layoutRoutes, SQUARE, type Route } from "~/lib/layouts";
 import { SliderControl } from "./slider-control";
 
 export type ListedRoute = {
-  id: number;
+  /** Stable across refreshes; see listRoutes. */
+  id: string;
+  /** Names the route for everyone, including screen-reader users, so it must be unique. */
   label: string;
   route: Route;
 };
 
 type Props = {
   routes: ListedRoute[];
-  hidden: ReadonlySet<number>;
-  rotations: Record<number, number>;
-  rotatingId: number | null;
-  onShow: (id: number, shown: boolean) => void;
+  hidden: ReadonlySet<string>;
+  rotations: Record<string, number>;
+  rotatingId: string | null;
+  onShow: (id: string, shown: boolean) => void;
   onShowAll: (shown: boolean) => void;
-  onRotatingChange: (id: number | null) => void;
-  onRotate: (id: number, degrees: number) => void;
+  onRotatingChange: (id: string | null) => void;
+  onRotate: (id: string, degrees: number) => void;
 };
 
 const PREVIEW = {
@@ -56,11 +58,11 @@ export function RouteList({
       <Disclosure.Content>
         <Disclosure.Body className="flex flex-col gap-3 pt-3">
           <p className="text-sm text-muted">{t("studio.routes.help")}</p>
+          {/* Always enabled: disabling the button just pressed would drop keyboard focus. */}
           <div className="flex gap-2">
             <Button
               size="sm"
               variant="tertiary"
-              isDisabled={hidden.size === 0}
               onPress={() => onShowAll(true)}
             >
               {t("studio.routes.showAll")}
@@ -68,7 +70,6 @@ export function RouteList({
             <Button
               size="sm"
               variant="tertiary"
-              isDisabled={routes.every(({ id }) => hidden.has(id))}
               onPress={() => onShowAll(false)}
             >
               {t("studio.routes.hideAll")}
@@ -165,18 +166,29 @@ const RouteRow = memo(function RouteRow({
         </Button>
       </div>
       {rotating && (
-        <SliderControl
-          label={t("studio.routes.angle", { route: label })}
-          value={rotation}
-          minValue={0}
-          maxValue={359}
-          formatOptions={{
-            style: "unit",
-            unit: "degree",
-            unitDisplay: "narrow",
-          }}
-          onChange={(degrees) => onRotate(id, degrees)}
-        />
+        <div className="flex flex-col items-start gap-2">
+          <SliderControl
+            label={t("studio.routes.angle", { route: label })}
+            value={rotation}
+            minValue={0}
+            maxValue={359}
+            formatOptions={{
+              style: "unit",
+              unit: "degree",
+              unitDisplay: "narrow",
+            }}
+            onChange={(degrees) => onRotate(id, degrees)}
+          />
+          {rotation !== 0 && (
+            <Button
+              size="sm"
+              variant="tertiary"
+              onPress={() => onRotate(id, 0)}
+            >
+              {t("studio.routes.turnBack")}
+            </Button>
+          )}
+        </div>
       )}
     </li>
   );

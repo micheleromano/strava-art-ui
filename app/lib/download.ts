@@ -17,6 +17,31 @@ export function downloadSvg(svg: SVGSVGElement, filename: string) {
   saveBlob(svgBlob(svg), filename);
 }
 
+// Phones (Safari especially) can't make canvases bigger than about 16.7 million pixels.
+const MAX_PNG_PIXELS = 16_777_216;
+const MAX_PNG_SIDE = 8192;
+// Browser zoom raises devicePixelRatio; beyond 3× it only makes files bigger.
+const MAX_PIXEL_RATIO = 3;
+
+/** The PNG size for a screen-shaped picture: the screen's real pixels, within what phones can draw. */
+export function screenPngSize(
+  screenWidth: number,
+  screenHeight: number,
+  pixelRatio: number,
+): { width: number; height: number } {
+  const ratio = Math.min(pixelRatio, MAX_PIXEL_RATIO);
+  const [width, height] = [screenWidth * ratio, screenHeight * ratio];
+  const shrink = Math.min(
+    1,
+    MAX_PNG_SIDE / Math.max(width, height),
+    Math.sqrt(MAX_PNG_PIXELS / (width * height)),
+  );
+  return {
+    width: Math.floor(width * shrink),
+    height: Math.floor(height * shrink),
+  };
+}
+
 /** Draws the SVG onto a `width` × `height` canvas and returns it as a PNG. */
 export async function makePng(
   svg: SVGSVGElement,
@@ -31,7 +56,10 @@ export async function makePng(
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
-    canvas.getContext("2d")?.drawImage(image, 0, 0, width, height);
+    const context = canvas.getContext("2d");
+    // Without this, a canvas the browser couldn't create would give a blank picture.
+    if (!context) throw new Error("Couldn't create a canvas this size");
+    context.drawImage(image, 0, 0, width, height);
     return await new Promise<Blob>((resolve, reject) =>
       canvas.toBlob(
         (blob) =>

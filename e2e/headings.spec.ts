@@ -29,3 +29,21 @@ test("the studio's headings don't skip levels, with the route list open", async 
   await page.getByRole("button", { name: /Choose and rotate routes/ }).click();
   expectNoSkippedLevels(await headingLevels(page));
 });
+
+test("pages credit Strava with its official logo, and the Connect button is Strava's own", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(
+    page
+      .getByRole("contentinfo")
+      .getByRole("img", { name: "Powered by Strava" }),
+  ).toBeVisible();
+  const connect = page.getByRole("button", { name: "Connect with Strava" });
+  await expect(connect.getByRole("img")).toHaveAttribute(
+    "src",
+    "/strava/btn_strava_connect_with_orange.svg",
+  );
+  // The app's own name is the most prominent thing on the page, not Strava's.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Route Art");
+});

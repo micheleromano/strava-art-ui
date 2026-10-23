@@ -36,16 +36,17 @@ import {
   downloadPng,
   downloadSvg,
   makePng,
+  screenPngSize,
   sharePng,
 } from "~/lib/download";
-import { platformFrom } from "~/lib/platform";
+import { listRoutes } from "~/lib/listed-routes";
+import { platformFrom, type Platform } from "~/lib/platform";
 import {
   loadActivities,
   refreshActivities,
   type LoadFailure,
 } from "~/lib/load-activities";
 import {
-  decodeRoutes,
   frameFor,
   LAYOUTS,
   layoutRoutes,
@@ -62,7 +63,7 @@ import type { Route } from "./+types/studio";
 
 // Square downloads are this many pixels across; screen-shaped ones match the screen's pixels.
 const SQUARE_PNG_SIZE = 2048;
-const PNG_FILENAME = "strava-art.png";
+const PNG_FILENAME = "route-art.png";
 // The same trim the sample data gets, applied to people's own routes when they ask for it.
 const TRIM_METRES = 500;
 const MAX_GRID = 10;
@@ -130,9 +131,7 @@ export default function Studio({
   const { activities, connected, source } = loaderData;
   const navigation = useNavigation();
   const refreshing = navigation.state !== "idle" && navigation.formData != null;
-  const [pngState, setPngState] = useState<
-    "idle" | "downloading" | "sharing" | "saved" | "failed" | "shareFailed"
-  >("idle");
+  const [exported, setExported] = useState<ExportState | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [background, setBackground] = useState(
     parseColor(PALETTES[0].background),
@@ -143,9 +142,10 @@ export default function Studio({
   const [zoom, setZoom] = useState(1);
   const [strokeWidth, setStrokeWidth] = useState(2);
   const [spacing, setSpacing] = useState(0.15);
-  const [rotations, setRotations] = useState<Record<number, number>>({});
-  const [rotatingId, setRotatingId] = useState<number | null>(null);
-  const [hidden, setHidden] = useState<ReadonlySet<number>>(new Set());
+  // Keyed by each route's stable id, so they stay with the right route after a refresh.
+  const [rotations, setRotations] = useState<Record<string, number>>({});
+  const [rotatingId, setRotatingId] = useState<string | null>(null);
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
   const [matchScreen, setMatchScreen] = useState(false);
   // This page only renders in the browser (see clientLoader), so the screen is known.
   const { width: screenWidth, height: screenHeight } = window.screen;
@@ -169,32 +169,30 @@ export default function Studio({
 
   // Decoding routes is the slow part, so it only reruns when the activities or dates change.
   const { drawable, skipped } = useMemo(() => {
-    const inDates = new Set(
-      inRange(
-        activities,
-        rangeFromParams(from, to, timeZone, activities),
-        timeZone,
-      ),
+    const inDates = inRange(
+      activities,
+      rangeFromParams(from, to, timeZone, activities),
+      timeZone,
     );
     const dateFormat = new Intl.DateTimeFormat(i18n.language, {
       dateStyle: "medium",
       timeZone,
     });
-    // An activity's position in the loaded list identifies it, e.g. to keep its rotation.
-    const shown = activities
-      .map((activity, id) => ({ activity, id }))
-      .filter(({ activity }) => inDates.has(activity))
-      .sort((a, b) => b.activity.startDate.localeCompare(a.activity.startDate));
-    const drawable = shown.flatMap(({ activity, id }) => {
-      // The sample is already trimmed; people's own routes are trimmed here if they choose.
-      const [route] = decodeRoutes(
-        [activity.polyline],
-        source === "strava" && hideEnds ? TRIM_METRES : 0,
-      );
-      const date = dateFormat.format(new Date(activity.startDate));
-      return route ? [{ id, label: date, route }] : [];
-    });
-    return { drawable, skipped: shown.length - drawable.length };
+    // The sample is already trimmed; people's own routes are trimmed here if they choose.
+    const { routes, skipped } = listRoutes(
+      inDates,
+      source === "strava" && hideEnds ? TRIM_METRES : 0,
+      (startDate) => dateFormat.format(new Date(startDate)),
+    );
+    const drawable = routes.map(({ id, date, sameDay, route }) => ({
+      id,
+      route,
+      label:
+        sameDay.count > 1
+          ? i18n.t("studio.routes.sameDay", { date, ...sameDay })
+          : date,
+    }));
+    return { drawable, skipped };
   }, [activities, from, to, timeZone, source, hideEnds]);
   const included = useMemo(
     () => drawable.filter(({ id }) => !hidden.has(id)),
@@ -213,7 +211,7 @@ export default function Studio({
 
   // Stable callbacks, so the route list only redraws the row that changed.
   const showRoute = useCallback(
-    (id: number, shown: boolean) =>
+    (id: string, shown: boolean) =>
       setHidden((current) => {
         const next = new Set(current);
         if (shown) next.delete(id);
@@ -232,7 +230,7 @@ export default function Studio({
     [drawable],
   );
   const rotateRoute = useCallback(
-    (id: number, degrees: number) =>
+    (id: string, degrees: number) =>
       setRotations((current) => ({ ...current, [id]: degrees })),
     [],
   );
@@ -261,31 +259,53 @@ export default function Studio({
   const changeRange = (next: DayRange) =>
     setParams({ from: next.start.toString(), to: next.end.toString() });
 
-  const exportPng = async (svg: SVGSVGElement, how: "download" | "share") => {
-    setPngState(how === "download" ? "downloading" : "sharing");
-    let png: Blob;
-    try {
-      png = matchScreen
-        ? await makePng(
-            svg,
-            Math.round(screenWidth * pixelRatio),
-            Math.round(screenHeight * pixelRatio),
-          )
-        : await makePng(svg, SQUARE_PNG_SIZE, SQUARE_PNG_SIZE);
-    } catch {
-      setPngState("failed");
-      return;
+  // A new object whenever anything that's drawn changes, so a finished PNG (and the
+  // message about it) only counts for the picture it was made from.
+  const picture = useMemo(
+    () => ({ paths, backgroundHex, lineHex, shades, strokeWidth, frame }),
+    [paths, backgroundHex, lineHex, shades, strokeWidth, frame],
+  );
+  const current = exported?.picture === picture ? exported : null;
+  const making = current?.status === "making";
+  const pngSize = matchScreen
+    ? screenPngSize(screenWidth, screenHeight, pixelRatio)
+    : { width: SQUARE_PNG_SIZE, height: SQUARE_PNG_SIZE };
+
+  const exportPng = async (svg: SVGSVGElement, how: ExportState["how"]) => {
+    // Reuse a PNG made on an earlier tap: phones only open the share menu right after a tap.
+    let png = current?.png;
+    setExported({ status: "making", how, picture, png });
+    if (!png) {
+      try {
+        png = await makePng(svg, pngSize.width, pngSize.height);
+      } catch {
+        setExported({ status: "failed", how, picture });
+        return;
+      }
     }
     if (how === "download") {
       downloadPng(png, PNG_FILENAME);
-      setPngState("saved");
+      setExported({ status: "downloaded", how, picture, png });
       return;
     }
     try {
+      const shared = await sharePng(png, PNG_FILENAME);
       // Closing the share menu without choosing anything isn't an error.
-      setPngState((await sharePng(png, PNG_FILENAME)) ? "saved" : "idle");
-    } catch {
-      setPngState("shareFailed");
+      setExported({
+        status: shared ? "shared" : "cancelled",
+        how,
+        picture,
+        png,
+      });
+    } catch (error) {
+      const tooSlow =
+        error instanceof DOMException && error.name === "NotAllowedError";
+      setExported({
+        status: tooSlow ? "shareReady" : "shareFailed",
+        how,
+        picture,
+        png,
+      });
     }
   };
 
@@ -323,18 +343,26 @@ export default function Studio({
             onChange={(next) => setParams({ layout: next })}
           />
 
-          <Checkbox isSelected={matchScreen} onChange={setMatchScreen}>
-            <Checkbox.Content>
-              {/* A border keeps the unticked box visible on light backgrounds. */}
-              <Checkbox.Control className="border border-foreground/50">
-                <Checkbox.Indicator />
-              </Checkbox.Control>
-              {t("studio.matchScreen", {
-                width: Math.round(screenWidth * pixelRatio),
-                height: Math.round(screenHeight * pixelRatio),
+          <div className="flex flex-col gap-1">
+            <Checkbox
+              isSelected={matchScreen}
+              onChange={setMatchScreen}
+              aria-describedby="screen-size"
+            >
+              <Checkbox.Content>
+                {/* A border keeps the unticked box visible on light backgrounds. */}
+                <Checkbox.Control className="border border-foreground/50">
+                  <Checkbox.Indicator />
+                </Checkbox.Control>
+                {t("studio.matchScreen")}
+              </Checkbox.Content>
+            </Checkbox>
+            <p id="screen-size" className="text-sm text-muted">
+              {t("studio.matchScreenSize", {
+                ...screenPngSize(screenWidth, screenHeight, pixelRatio),
               })}
-            </Checkbox.Content>
-          </Checkbox>
+            </p>
+          </div>
 
           {source === "strava" && (
             <div className="flex flex-col gap-2">
@@ -483,8 +511,8 @@ export default function Studio({
 
           <div className="flex flex-wrap gap-2">
             <Button
-              isDisabled={paths.length === 0}
-              isPending={pngState === "downloading"}
+              isDisabled={paths.length === 0 || making}
+              isPending={making && current?.how === "download"}
               onPress={() =>
                 svgRef.current && exportPng(svgRef.current, "download")
               }
@@ -494,8 +522,8 @@ export default function Studio({
             {canShare && (
               <Button
                 variant="secondary"
-                isDisabled={paths.length === 0}
-                isPending={pngState === "sharing"}
+                isDisabled={paths.length === 0 || making}
+                isPending={making && current?.how === "share"}
                 onPress={() =>
                   svgRef.current && exportPng(svgRef.current, "share")
                 }
@@ -507,37 +535,30 @@ export default function Studio({
               variant="secondary"
               isDisabled={paths.length === 0}
               onPress={() =>
-                svgRef.current && downloadSvg(svgRef.current, "strava-art.svg")
+                svgRef.current && downloadSvg(svgRef.current, "route-art.svg")
               }
             >
               {t("studio.downloadSvg")}
             </Button>
           </div>
 
-          {(pngState === "failed" || pngState === "shareFailed") && (
-            <Alert status="danger">
-              <Alert.Indicator />
-              <Alert.Content>
-                <Alert.Description>
-                  {pngState === "failed"
-                    ? t("studio.pngFailed")
-                    : t("studio.shareFailed")}
-                </Alert.Description>
-              </Alert.Content>
-            </Alert>
+          {canShare && source === "strava" && (
+            <p className="text-sm text-muted">{t("studio.shareNote")}</p>
           )}
 
-          {pngState === "saved" && (
-            <Alert status="accent">
-              <Alert.Indicator />
-              <Alert.Content>
-                <Alert.Title>{t("studio.wallpaper.title")}</Alert.Title>
-                <Alert.Description>
-                  {t(`studio.wallpaper.${platform}`)}
-                </Alert.Description>
-              </Alert.Content>
-            </Alert>
-          )}
+          {/* Always present, so screen readers announce each result as it appears. */}
+          <div role="status" className="flex flex-col gap-2">
+            {making && (
+              <span className="sr-only">{t("studio.exported.making")}</span>
+            )}
+            {current && (
+              <ExportMessage
+                status={current.status}
+                platform={platform}
+                square={!matchScreen}
+              />
+            )}
+          </div>
 
           {source === "strava" && (
             <Form method="post" className="flex flex-col items-start gap-2">
@@ -587,6 +608,84 @@ export default function Studio({
         </section>
       </div>
     </main>
+  );
+}
+
+type ExportState = {
+  status:
+    | "making"
+    | "downloaded"
+    | "shared"
+    | "cancelled"
+    | "shareReady"
+    | "failed"
+    | "shareFailed";
+  how: "download" | "share";
+  /** The picture this PNG was made from; see `picture` in Studio. */
+  picture: object;
+  png?: Blob;
+};
+
+function ExportMessage({
+  status,
+  platform,
+  square,
+}: {
+  status: ExportState["status"];
+  platform: Platform;
+  square: boolean;
+}) {
+  const { t } = useTranslation();
+  if (status === "making" || status === "cancelled") return null;
+  if (status === "failed" || status === "shareFailed") {
+    return (
+      <Alert status="danger">
+        <Alert.Indicator />
+        <Alert.Content>
+          <Alert.Description>
+            {status === "failed"
+              ? t("studio.pngFailed")
+              : t("studio.shareFailed")}
+          </Alert.Description>
+        </Alert.Content>
+      </Alert>
+    );
+  }
+  if (status === "shareReady") {
+    return (
+      <Alert>
+        <Alert.Indicator />
+        <Alert.Content>
+          <Alert.Description>
+            {t("studio.exported.shareReady")}
+          </Alert.Description>
+        </Alert.Content>
+      </Alert>
+    );
+  }
+  // After sharing, only phones get steps: elsewhere it may have gone to a chat or AirDrop.
+  const steps =
+    status === "downloaded"
+      ? t(`studio.wallpaper.${platform}`)
+      : platform === "ios" || platform === "android"
+        ? t(`studio.wallpaper.shared.${platform}`)
+        : null;
+  return (
+    <Alert status="accent">
+      <Alert.Indicator />
+      <Alert.Content>
+        <Alert.Title>
+          {status === "downloaded"
+            ? t("studio.exported.downloaded")
+            : t("studio.exported.shared")}
+        </Alert.Title>
+        {steps && (
+          <Alert.Description>
+            {steps} {square && t("studio.wallpaper.squareHint")}
+          </Alert.Description>
+        )}
+      </Alert.Content>
+    </Alert>
   );
 }
 

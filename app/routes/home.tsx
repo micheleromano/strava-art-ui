@@ -93,7 +93,23 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <Card.Footer>
               {/* A full page post, so the browser follows the redirect to Strava's sign-in. */}
               <Form method="post" action="/auth/strava" reloadDocument>
-                <Button type="submit">{t("home.connect.action")}</Button>
+                {/*
+                  Strava's official button, unmodified as its brand guidelines require
+                  (https://developers.strava.com/guidelines/), so a plain button rather
+                  than HeroUI's, which would restyle it. It leads straight on to
+                  Strava's own sign-in page.
+                */}
+                <button
+                  type="submit"
+                  className="cursor-pointer rounded-md focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:outline-none"
+                >
+                  <img
+                    src="/strava/btn_strava_connect_with_orange.svg"
+                    alt={t("home.connect.action")}
+                    width={237}
+                    height={48}
+                  />
+                </button>
               </Form>
             </Card.Footer>
           </Card>
