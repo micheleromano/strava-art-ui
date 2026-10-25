@@ -92,37 +92,53 @@ test("people's own routes show on a globe as rounded areas, and download with a 
   expect(filled.rgba).toEqual([0x0f, 0x17, 0x2a, 255]);
 });
 
-test.describe("for someone who prefers reduced motion", () => {
-  test.use({ reducedMotion: "reduce" });
+test("the globe starts still, and spins at the chosen speed once asked to", async ({
+  page,
+}) => {
+  await connect(page);
+  await page.goto(GLOBE);
+  const canvas = page.getByRole("img", { name: /A globe with/ });
+  const drawing = () =>
+    canvas.evaluate((el) => (el as HTMLCanvasElement).toDataURL());
 
-  test("the globe starts still, and can be set spinning", async ({ page }) => {
-    await connect(page);
-    await page.goto(GLOBE);
-    const spin = page.getByRole("button", { name: "Spin the globe" });
-    await expect(spin).toBeVisible();
-    await spin.click();
-    await expect(
-      page.getByRole("button", { name: "Pause spinning" }),
-    ).toBeVisible();
-  });
+  // Still by default, for everyone: the drawing doesn't change by itself.
+  const spin = page.getByRole("button", { name: "Spin the globe" });
+  await expect(spin).toBeVisible();
+  await page.waitForTimeout(2000); // Past the moment a new globe settles.
+  const still = await drawing();
+  await page.waitForTimeout(500);
+  expect(await drawing()).toBe(still);
 
-  // Paused by reduced motion, so only the tilt can change the drawing.
-  test("the tilt slider turns the globe north or south", async ({ page }) => {
-    await connect(page);
-    await page.goto(GLOBE);
-    // Paris is at about 48.9° N, so the globe starts tilted half way toward it.
-    const tilt = page.getByRole("slider", { name: "Tilt" });
-    await expect(tilt).toHaveValue("24");
+  const speed = page.getByRole("slider", { name: "Spin speed" });
+  await expect(speed).toHaveValue("3");
+  await expect(page.getByText("One turn every 40 seconds.")).toBeVisible();
+  await speed.focus();
+  await page.keyboard.press("End");
+  await expect(page.getByText("One turn every 12 seconds.")).toBeVisible();
 
-    const canvas = page.getByRole("img", { name: /A globe with/ });
-    const drawing = () =>
-      canvas.evaluate((el) => (el as HTMLCanvasElement).toDataURL());
-    const before = await drawing();
-    await tilt.focus();
-    await page.keyboard.press("Home"); // All the way south.
-    await expect(tilt).toHaveValue("-90");
-    await expect.poll(drawing).not.toBe(before);
-  });
+  await spin.click();
+  await expect(
+    page.getByRole("button", { name: "Pause spinning" }),
+  ).toBeVisible();
+  await expect.poll(drawing).not.toBe(still);
+});
+
+// Still by default, so only the tilt can change the drawing.
+test("the tilt slider turns the globe north or south", async ({ page }) => {
+  await connect(page);
+  await page.goto(GLOBE);
+  // Paris is at about 48.9° N, so the globe starts tilted half way toward it.
+  const tilt = page.getByRole("slider", { name: "Tilt" });
+  await expect(tilt).toHaveValue("24");
+
+  const canvas = page.getByRole("img", { name: /A globe with/ });
+  const drawing = () =>
+    canvas.evaluate((el) => (el as HTMLCanvasElement).toDataURL());
+  const before = await drawing();
+  await tilt.focus();
+  await page.keyboard.press("Home"); // All the way south.
+  await expect(tilt).toHaveValue("-90");
+  await expect.poll(drawing).not.toBe(before);
 });
 
 test.describe("where the browser can share files", () => {

@@ -157,7 +157,9 @@
       "unsupported": "This browser can't draw the globe. It needs WebGL, which may be switched off. Try another browser or layout.",
       "shareNote": "Anyone you send the picture to can see the areas you've been active in, rounded to about 25 km.",
       "tilt": "Tilt",
-      "tiltHelp": "Higher shows more of the north, lower more of the south. The globe keeps spinning as you tilt it."
+      "tiltHelp": "Higher shows more of the north, lower more of the south. The globe keeps spinning as you tilt it.",
+      "speed": "Spin speed",
+      "speedHelp": "One turn every {{seconds}} seconds."
     }
   },
   "errors": {
