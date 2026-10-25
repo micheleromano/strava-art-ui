@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 
 import {
   globeColours,
+  secondsPerTurn,
+  SPIN_SPEED,
   spinFor,
   markersFor,
   spinFacing,
@@ -12,6 +14,8 @@ import {
   toRgb,
 } from "~/lib/globe";
 import type { Place } from "~/lib/places";
+
+import { SliderControl } from "./slider-control";
 
 type Props = {
   places: Place[];
@@ -29,6 +33,9 @@ type Props = {
 // The globe is drawn at its on-screen size, at up to 2× pixel density and at most this
 // many pixels across: drawing more costs a lot without a graphics chip, every frame.
 const MAX_PIXELS_ACROSS = 2000;
+// While spinning, draw at most 30 frames a second: smooth enough for a slow turn, and
+// half the work (or a quarter, on 120 Hz phones) of drawing every frame.
+const SPINNING_FRAME_MS = 1000 / 30;
 // cobe loads its world map in the background and only shows it on a later redraw, so a
 // new globe keeps redrawing for this long even while paused.
 const SETTLE_MS = 1500;
@@ -52,10 +59,9 @@ export function GlobeArt({
   const theta = useRef(tiltAngle(tilt));
   theta.current = tiltAngle(tilt);
   const [supported, setSupported] = useState(true);
-  // Starts still for anyone who has asked their device to reduce motion.
-  const [paused, setPaused] = useState(
-    () => matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
+  // Still until someone chooses to spin it.
+  const [paused, setPaused] = useState(true);
+  const [speed, setSpeed] = useState<number>(SPIN_SPEED.initial);
 
   // cobe draws on the canvas outside React, so this connects the two: create the globe,
   // and destroy it when the places or colours change or the globe goes away.
@@ -98,29 +104,33 @@ export function GlobeArt({
     };
   }, [places, background, dot, canvasRef]);
 
-  // Redraws every frame while spinning. While paused it only redraws when something
-  // changes (the tilt) or a new globe is settling, so a still globe costs nothing.
+  // Draws up to 30 frames a second while spinning. While still, it only redraws when
+  // something changes (the tilt) or a new globe is settling, so a still globe costs nothing.
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
   useEffect(() => {
     let drawnTheta = NaN;
-    let lastFrame = performance.now();
+    let lastDrawn = performance.now();
     let frame = requestAnimationFrame(function draw(now) {
       const spinning = !pausedRef.current;
-      if (spinning && phi.current !== null) {
-        phi.current += spinFor(now - lastFrame);
-      }
-      lastFrame = now;
+      // A couple of milliseconds' leeway, so 60 Hz screens draw every other frame.
+      const spinDue = spinning && now - lastDrawn >= SPINNING_FRAME_MS - 2;
       if (
-        spinning ||
+        spinDue ||
         now < settleUntil.current ||
         theta.current !== drawnTheta
       ) {
+        if (spinning && phi.current !== null) {
+          phi.current += spinFor(now - lastDrawn, speedRef.current);
+        }
         globeRef.current?.update({
           phi: phi.current ?? 0,
           theta: theta.current,
         });
         drawnTheta = theta.current;
+        lastDrawn = now;
       }
       frame = requestAnimationFrame(draw);
     });
@@ -157,6 +167,20 @@ export function GlobeArt({
       >
         {paused ? t("studio.globe.spin") : t("studio.globe.pause")}
       </Button>
+      <div className="flex w-full max-w-xs flex-col gap-1">
+        <SliderControl
+          label={t("studio.globe.speed")}
+          value={speed}
+          minValue={SPIN_SPEED.min}
+          maxValue={SPIN_SPEED.max}
+          onChange={setSpeed}
+        />
+        <p className="text-sm text-muted">
+          {t("studio.globe.speedHelp", {
+            seconds: Math.round(secondsPerTurn(speed)),
+          })}
+        </p>
+      </div>
     </div>
   );
 }
