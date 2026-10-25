@@ -2,7 +2,7 @@ import { Button, Checkbox, Disclosure } from "@heroui/react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ART_SIZE, layoutRoutes, SQUARE, type Route } from "~/lib/layouts";
+import { ART_SIZE, previewPath, type Route } from "~/lib/layouts";
 
 import { SliderControl } from "./slider-control";
 
@@ -23,16 +23,9 @@ type Props = {
   onShowAll: (shown: boolean) => void;
   onRotatingChange: (id: string | null) => void;
   onRotate: (id: string, degrees: number) => void;
+  /** False where turning routes means nothing, e.g. on the globe. */
+  canRotate?: boolean;
 };
-
-const PREVIEW = {
-  layout: "grid",
-  frame: SQUARE,
-  zoom: 1,
-  columns: 1,
-  rows: 1,
-  spacing: 0.15,
-} as const;
 
 /** Every route in the chosen dates: untick one to leave it out, or rotate it. */
 export function RouteList({
@@ -44,6 +37,7 @@ export function RouteList({
   onShowAll,
   onRotatingChange,
   onRotate,
+  canRotate = true,
 }: Props) {
   const { t } = useTranslation();
   return (
@@ -51,7 +45,9 @@ export function RouteList({
       {/* Level 2: it sits directly under the page title, an h1. */}
       <Disclosure.Heading level={2}>
         <Button slot="trigger" variant="secondary" size="sm">
-          {t("studio.routes.toggle", { count: routes.length })}
+          {canRotate
+            ? t("studio.routes.toggle", { count: routes.length })
+            : t("studio.routes.toggleChooseOnly", { count: routes.length })}
           <Disclosure.Indicator />
         </Button>
       </Disclosure.Heading>
@@ -87,7 +83,8 @@ export function RouteList({
                 route={route}
                 shown={!hidden.has(id)}
                 rotation={rotations[id] ?? 0}
-                rotating={rotatingId === id}
+                rotating={canRotate && rotatingId === id}
+                canRotate={canRotate}
                 onShow={onShow}
                 onRotatingChange={onRotatingChange}
                 onRotate={onRotate}
@@ -104,6 +101,7 @@ type RowProps = ListedRoute & {
   shown: boolean;
   rotation: number;
   rotating: boolean;
+  canRotate: boolean;
   onShow: Props["onShow"];
   onRotatingChange: Props["onRotatingChange"];
   onRotate: Props["onRotate"];
@@ -117,6 +115,7 @@ const RouteRow = memo(function RouteRow({
   shown,
   rotation,
   rotating,
+  canRotate,
   onShow,
   onRotatingChange,
   onRotate,
@@ -137,7 +136,7 @@ const RouteRow = memo(function RouteRow({
               className="size-8 shrink-0"
             >
               <path
-                d={layoutRoutes([route], PREVIEW, [rotation])[0]}
+                d={previewPath(route, rotation)}
                 fill="none"
                 stroke="currentColor"
                 strokeWidth={60}
@@ -155,15 +154,17 @@ const RouteRow = memo(function RouteRow({
             </span>
           </Checkbox.Content>
         </Checkbox>
-        <Button
-          size="sm"
-          variant={rotating ? "secondary" : "ghost"}
-          aria-pressed={rotating}
-          aria-label={t("studio.routes.rotateOne", { route: label })}
-          onPress={() => onRotatingChange(rotating ? null : id)}
-        >
-          {t("studio.routes.rotate")}
-        </Button>
+        {canRotate && (
+          <Button
+            size="sm"
+            variant={rotating ? "secondary" : "ghost"}
+            aria-pressed={rotating}
+            aria-label={t("studio.routes.rotateOne", { route: label })}
+            onPress={() => onRotatingChange(rotating ? null : id)}
+          >
+            {t("studio.routes.rotate")}
+          </Button>
+        )}
       </div>
       {rotating && (
         <div className="flex flex-col items-start gap-2">

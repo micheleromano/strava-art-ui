@@ -9,6 +9,8 @@ export type ListedRoute = {
   /** Position among routes on the same day (1-based), and how many there are; 1 of 1 when alone. */
   sameDay: { position: number; count: number };
   route: Route;
+  /** The activity's stored, rounded place, where it has one (the owner's sample). */
+  place?: [number, number];
 };
 
 /**
@@ -42,6 +44,7 @@ export function listRoutes(
       date,
       sameDay: { position, count: perDay.get(date) ?? 1 },
       route,
+      place: activity.place,
     };
   });
   return { routes, skipped: activities.length - routes.length };

@@ -8,8 +8,13 @@ const PADDING = 40;
 const METRES_PER_DEGREE = 111_320;
 
 // Neither layout shows where routes really are, so the app only ever needs their shapes.
-export const LAYOUTS = ["start", "grid", "chain"] as const;
+export const LAYOUTS = ["start", "chain"] as const;
 export type Layout = (typeof LAYOUTS)[number];
+
+// Every layout the studio offers. The globe isn't drawn as lines, so it's not in LAYOUTS:
+// it shows rounded places on a 3D globe instead (see app/lib/places.ts).
+export const ART_LAYOUTS = [...LAYOUTS, "globe"] as const;
+export type ArtLayout = (typeof ART_LAYOUTS)[number];
 
 export type Frame = { width: number; height: number };
 
@@ -27,10 +32,6 @@ export type LayoutOptions = {
   frame: Frame;
   /** Same start and chain: 1 fits the picture; higher zooms in. */
   zoom: number;
-  columns: number;
-  rows: number;
-  /** Grid: share of each cell left empty around its route, 0–1. */
-  spacing: number;
 };
 
 type Point = [x: number, y: number];
@@ -53,8 +54,7 @@ export function decodeRoutes(encoded: string[], trimMetres = 0): Route[] {
 }
 
 /**
- * SVG path data for each route, in the order of `routes`; a grid only draws the first
- * cells' worth. Lines are clipped to the picture's edges, so nothing outside it ends up
+ * SVG path data for each route, in the order of `routes`. Lines are clipped to the picture's edges, so nothing outside it ends up
  * in a downloaded file.
  */
 export function layoutRoutes(
@@ -76,14 +76,6 @@ function place(shapes: Point[][], options: LayoutOptions): Point[][] {
   switch (options.layout) {
     case "start":
       return sameStart(shapes, options.frame, options.zoom);
-    case "grid":
-      return grid(
-        shapes,
-        options.frame,
-        options.columns,
-        options.rows,
-        options.spacing,
-      );
     case "chain":
       return chain(shapes, options.frame, options.zoom);
   }
@@ -110,32 +102,19 @@ function sameStart(local: Point[][], frame: Frame, zoom: number): Point[][] {
   );
 }
 
-/** The first `columns` × `rows` routes, each scaled to fill its own cell. */
-function grid(
-  shapes: Point[][],
-  frame: Frame,
-  columns: number,
-  rows: number,
-  spacing: number,
-): Point[][] {
-  const cellWidth = frame.width / columns;
-  const cellHeight = frame.height / rows;
-  return shapes.slice(0, columns * rows).map((points, index) => {
-    const box = bounds(points);
-    const scale = Math.min(
-      (cellWidth * (1 - spacing)) / Math.max(box.width, 1),
-      (cellHeight * (1 - spacing)) / Math.max(box.height, 1),
-    );
-    const left =
-      (index % columns) * cellWidth + (cellWidth - box.width * scale) / 2;
-    const top =
-      Math.floor(index / columns) * cellHeight +
-      (cellHeight - box.height * scale) / 2;
-    return points.map(([x, y]): Point => [
+/** One route on its own, turned by `rotation` degrees and fitted to a square: the route list's previews. */
+export function previewPath(route: Route, rotation: number): string {
+  const points = rotate(toMetres(route, route[0]), rotation);
+  const box = bounds(points);
+  const scale = (ART_SIZE * 0.85) / Math.max(box.width, box.height, 1);
+  const left = (ART_SIZE - box.width * scale) / 2;
+  const top = (ART_SIZE - box.height * scale) / 2;
+  return toPath([
+    points.map(([x, y]): Point => [
       left + (x - box.minX) * scale,
       top + (y - box.minY) * scale,
-    ]);
-  });
+    ]),
+  ]);
 }
 
 /** Metres east and south of `origin`, corrected for latitude so shapes aren't stretched. */

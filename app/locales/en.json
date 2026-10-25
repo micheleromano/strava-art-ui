@@ -40,7 +40,7 @@
     "loading": "Loading your activities…",
     "sample": {
       "title": "Sample routes",
-      "body": "These are some of the creator's public activities. Only the day of each one is kept, and the first and last 500 metres of each route are removed."
+      "body": "These are some of the creator's public activities. Only the day of each one is kept, the first and last 500 metres of each route are removed, and on the globe each one shows only as an area about 25 km across."
     },
     "dates": "Dates",
     "background": "Background colour",
@@ -69,24 +69,21 @@
     "artLabel": {
       "start_one": "1 route drawn from the middle of the picture.",
       "start_other": "{{count}} routes drawn from the same starting point, spreading out from the centre.",
-      "grid_one": "1 route drawn in a grid.",
-      "grid_other": "{{count}} routes drawn in a grid, one per square.",
       "chain_one": "1 route drawn on its own.",
-      "chain_other": "{{count}} routes joined end to end, each starting where the one before it finished."
+      "chain_other": "{{count}} routes joined end to end, each starting where the one before it finished.",
+      "globe_one": "A globe with 1 dot, for the area of {{routes}} routes, rounded to about 25 km.",
+      "globe_other": "A globe with {{count}} dots, for the areas of {{routes}} routes, rounded to about 25 km."
     },
     "layout": {
       "label": "Layout",
       "start": "Same starting point",
-      "grid": "Grid",
       "startHelp": "Every route starts in the middle and spreads out from there.",
-      "gridHelp": "One route per square, newest first, each as big as its square.",
       "chain": "End to end",
-      "chainHelp": "Each route starts where the one before it finished, oldest first, turned so they all fit."
+      "chainHelp": "Each route starts where the one before it finished, oldest first, turned so they all fit.",
+      "globe": "Globe",
+      "globeHelp": "A spinning globe with a dot for each area you've been active in."
     },
     "thickness": "Line thickness",
-    "columns": "Columns",
-    "rows": "Rows",
-    "spacing": "Space around each route",
     "shades": "Use shades of the line colour",
     "palettes": {
       "label": "Colour combinations",
@@ -104,15 +101,14 @@
     "hideEnds": "Hide where each route starts and finishes (the first and last 500 metres)",
     "privacy": {
       "start": "Every route starts in the middle, so the lines around it show where you usually set off from.",
-      "grid": "Each route is shown on its own, but someone who knows the area may recognise its shape.",
-      "chain": "Joining routes end to end hides where most of them start, but someone who knows the area may recognise their shapes."
+      "chain": "Joining routes end to end hides where most of them start, but someone who knows the area may recognise their shapes.",
+      "globe": "Dots are rounded to about 25 km and placed at the middle of each route, so the globe shows the areas you go to, not where you start or any exact place."
     },
-    "gridShown": "Showing the latest {{count}} of {{total}} routes in these dates.",
     "noMaps": "None of the activities in these dates have a map, so there's nothing to draw.",
     "routes": {
       "toggle_one": "Choose and rotate the route",
       "toggle_other": "Choose and rotate routes ({{count}})",
-      "help": "Untick a route to leave it out of the picture. In a grid, the next route takes its square.",
+      "help": "Untick a route to leave it out of the picture.",
       "list": "Routes in these dates, newest first",
       "showAll": "Show all",
       "hideAll": "Hide all",
@@ -121,7 +117,9 @@
       "angle": "Rotation for the route from {{route}}",
       "turned": "Turned {{degrees}}°",
       "sameDay": "{{date}} ({{position}} of {{count}})",
-      "turnBack": "Turn back to 0°"
+      "turnBack": "Turn back to 0°",
+      "toggleChooseOnly_one": "Choose the route",
+      "toggleChooseOnly_other": "Choose routes ({{count}})"
     },
     "hiddenCount_one": "You've hidden 1 route.",
     "hiddenCount_other": "You've hidden {{count}} routes.",
@@ -148,6 +146,18 @@
       "downloaded": "Download started",
       "shared": "Shared",
       "shareReady": "Your picture is ready. Tap Share or save picture again to open the share menu."
+    },
+    "globe": {
+      "sampleUnavailable": "The globe isn't available for these sample routes, because they don't include any places.",
+      "shown_one": "1 area, from {{routes}} routes.",
+      "shown_other": "{{count}} areas, from {{routes}} routes.",
+      "transparent": "Transparent background (for putting on a website)",
+      "pause": "Pause spinning",
+      "spin": "Spin the globe",
+      "unsupported": "This browser can't draw the globe. It needs WebGL, which may be switched off. Try another browser or layout.",
+      "shareNote": "Anyone you send the picture to can see the areas you've been active in, rounded to about 25 km.",
+      "tilt": "Tilt",
+      "tiltHelp": "Higher shows more of the north, lower more of the south. The globe keeps spinning as you tilt it."
     }
   },
   "errors": {

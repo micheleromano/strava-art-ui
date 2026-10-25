@@ -1,6 +1,7 @@
 // Fetches the app owner's public Strava activities once, keeps only the day each one
-// happened, trims the ends of every route and keeps only its shape (no real
-// coordinates), and saves them as the sample data visitors can use without connecting Strava.
+// happened, trims the ends of every route and keeps only its shape plus where it was,
+// rounded to about 25 km (no exact coordinates), and saves them as the sample data
+// visitors can use without connecting Strava.
 // Run with `pnpm demo:fetch`. Needs STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET in .dev.vars.
 import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -18,6 +19,7 @@ import {
   fetchStravaActivities,
   type StravaConfig,
 } from "../app/lib/strava";
+import { placeOf } from "../app/lib/places";
 import { toShape } from "../app/lib/shape";
 import { trimEnds } from "../app/lib/trim-ends";
 
@@ -91,19 +93,21 @@ const activities = await fetchStravaActivities(config, tokens.accessToken);
 const sample: Activity[] = activities
   // Only what the owner already shows to everyone on Strava.
   .filter((activity) => activity.visibility === "everyone")
-  .map((activity) => ({
-    // Midday UTC on the owner's local date: keeps the day but not the time they were out.
-    startDate: `${activity.start_date_local.slice(0, 10)}T12:00:00Z`,
-    // Trimmed, then stored as a shape only: no real coordinates leave this machine.
-    polyline: polyline.encode(
-      toShape(
-        trimEnds(
-          polyline.decode(activity.map?.summary_polyline ?? ""),
-          TRIM_METRES,
-        ),
-      ),
-    ),
-  }));
+  .map((activity) => {
+    const trimmed = trimEnds(
+      polyline.decode(activity.map?.summary_polyline ?? ""),
+      TRIM_METRES,
+    );
+    // Rounded to about 25 km, the same as everyone's globe: the only position kept.
+    const place = placeOf(trimmed);
+    return {
+      // Midday UTC on the owner's local date: keeps the day but not the time they were out.
+      startDate: `${activity.start_date_local.slice(0, 10)}T12:00:00Z`,
+      // Stored as a shape only: no exact coordinates leave this machine.
+      polyline: polyline.encode(toShape(trimmed)),
+      ...(place && { place }),
+    };
+  });
 
 mkdirSync(dirname(OUTPUT), { recursive: true });
 writeFileSync(OUTPUT, JSON.stringify(sample));
