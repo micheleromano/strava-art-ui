@@ -73,7 +73,7 @@ export async function makePng(
 }
 
 /**
- * A PNG of the globe's canvas, as drawn. With a `background` colour it's filled in behind
+ * A PNG of the globe's canvas, as drawn: as sharp as it is on screen. With a `background` colour it's filled in behind
  * the globe; without one the PNG keeps a transparent background, ready to put on a website.
  */
 export async function globePng(

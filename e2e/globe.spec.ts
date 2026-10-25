@@ -78,7 +78,12 @@ test("people's own routes show on a globe as rounded areas, and download with a 
   });
   await expect(transparent).toBeChecked();
   const clear = await cornerPixel(page, await downloadPng(page));
-  expect([clear.width, clear.height]).toEqual([2000, 2000]);
+  // Square, at the size the globe is drawn on screen.
+  const drawn = await page
+    .getByRole("img", { name: /A globe with/ })
+    .evaluate((canvas) => (canvas as HTMLCanvasElement).width);
+  expect([clear.width, clear.height]).toEqual([drawn, drawn]);
+  expect(drawn).toBeGreaterThanOrEqual(500);
   expect(clear.rgba[3]).toBe(0);
 
   // Unticked, the background colour fills in behind the globe (Midnight: #0f172a).

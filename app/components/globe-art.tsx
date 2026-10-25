@@ -25,11 +25,14 @@ type Props = {
   canvasRef: RefObject<HTMLCanvasElement | null>;
 };
 
-// The globe is drawn 1000 px across at 2× pixel density, so the PNG is 2000 × 2000.
-const SIZE = 1000;
-const PIXEL_RATIO = 2;
+// The globe is drawn at its on-screen size, at up to 2× pixel density and at most this
+// many pixels across: drawing more costs a lot without a graphics chip, every frame.
+const MAX_PIXELS_ACROSS = 2000;
 // Radians per frame: one full turn in about 35 seconds at 60 frames a second.
 const SPIN = 0.003;
+// cobe loads its world map in the background and only shows it on a later redraw, so a
+// new globe keeps redrawing for this long even while paused.
+const SETTLE_MS = 1500;
 
 /** A spinning globe with a dot for each rounded place, drawn by the cobe library. */
 export function GlobeArt({
@@ -43,6 +46,7 @@ export function GlobeArt({
 }: Props) {
   const { t } = useTranslation();
   const globeRef = useRef<Globe | null>(null);
+  const settleUntil = useRef(0);
   const phi = useRef(0);
   // Read on every frame, so the spin and the tilt combine.
   const theta = useRef(tiltAngle(tilt));
@@ -63,10 +67,15 @@ export function GlobeArt({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const across = canvas.clientWidth || 1000;
     const globe = createGlobe(canvas, {
-      width: SIZE,
-      height: SIZE,
-      devicePixelRatio: PIXEL_RATIO,
+      width: across,
+      height: across,
+      devicePixelRatio: Math.min(
+        window.devicePixelRatio,
+        2,
+        MAX_PIXELS_ACROSS / across,
+      ),
       phi: phi.current,
       theta: theta.current,
       mapSamples: 16000,
@@ -81,6 +90,7 @@ export function GlobeArt({
       context: { preserveDrawingBuffer: true },
     });
     globeRef.current = globe;
+    settleUntil.current = performance.now() + SETTLE_MS;
     // cobe draws nothing, silently, where WebGL isn't available.
     setSupported(
       Boolean(canvas.getContext("webgl2") ?? canvas.getContext("webgl")),
@@ -91,14 +101,23 @@ export function GlobeArt({
     };
   }, [places, background, dot, canvasRef]);
 
-  // Redraws every frame, even when paused: cobe loads its world map in the background
-  // and only shows it on the next redraw. Pausing only stops the turning.
+  // Redraws every frame while spinning. While paused it only redraws when something
+  // changes (the tilt) or a new globe is settling, so a still globe costs nothing.
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
   useEffect(() => {
-    let frame = requestAnimationFrame(function draw() {
-      if (!pausedRef.current) phi.current += SPIN;
-      globeRef.current?.update({ phi: phi.current, theta: theta.current });
+    let drawnTheta = NaN;
+    let frame = requestAnimationFrame(function draw(now) {
+      const spinning = !pausedRef.current;
+      if (spinning) phi.current += SPIN;
+      if (
+        spinning ||
+        now < settleUntil.current ||
+        theta.current !== drawnTheta
+      ) {
+        globeRef.current?.update({ phi: phi.current, theta: theta.current });
+        drawnTheta = theta.current;
+      }
       frame = requestAnimationFrame(draw);
     });
     return () => cancelAnimationFrame(frame);
