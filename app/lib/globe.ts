@@ -18,6 +18,19 @@ export function markersFor(places: Place[]) {
   }));
 }
 
+// One full turn every 35 seconds.
+const SPIN_PER_SECOND = (2 * Math.PI) / 35;
+// After a long gap between frames (a hidden tab, say), don't jump the globe round.
+const MAX_FRAME_GAP_MS = 100;
+
+/**
+ * How far to turn the globe, in radians, for `elapsedMs` since the last frame. By time,
+ * not per frame, so it spins at the same speed on phones that draw fewer frames a second.
+ */
+export function spinFor(elapsedMs: number): number {
+  return (SPIN_PER_SECOND * Math.min(elapsedMs, MAX_FRAME_GAP_MS)) / 1000;
+}
+
 /** cobe's spin angle that turns `location`'s longitude to face the viewer. */
 export function spinFacing([, lng]: [number, number]): number {
   return Math.PI - ((lng * Math.PI) / 180 - Math.PI / 2);

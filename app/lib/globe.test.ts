@@ -5,6 +5,7 @@ import {
   globeColours,
   markersFor,
   spinFacing,
+  spinFor,
   tiltAngle,
   toRgb,
 } from "./globe";
@@ -33,6 +34,26 @@ describe("spinFacing", () => {
     expect(spinFacing([51.5, 0]) - spinFacing([35.75, 139.75])).toBeCloseTo(
       (139.75 * Math.PI) / 180,
     );
+  });
+});
+
+describe("spinFor", () => {
+  const oneSecond = (framesPerSecond: number) =>
+    Array.from({ length: framesPerSecond }, () =>
+      spinFor(1000 / framesPerSecond),
+    ).reduce((total, step) => total + step, 0);
+
+  it("turns the same amount each second, whatever the frame rate", () => {
+    expect(oneSecond(30)).toBeCloseTo(oneSecond(60));
+    expect(oneSecond(120)).toBeCloseTo(oneSecond(60));
+  });
+
+  it("makes one full turn every 35 seconds", () => {
+    expect(oneSecond(60) * 35).toBeCloseTo(2 * Math.PI);
+  });
+
+  it("doesn't jump after a long pause between frames", () => {
+    expect(spinFor(5000)).toBe(spinFor(100));
   });
 });
 

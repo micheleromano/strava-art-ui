@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import {
   globeColours,
+  spinFor,
   markersFor,
   spinFacing,
   tiltAngle,
@@ -28,8 +29,6 @@ type Props = {
 // The globe is drawn at its on-screen size, at up to 2× pixel density and at most this
 // many pixels across: drawing more costs a lot without a graphics chip, every frame.
 const MAX_PIXELS_ACROSS = 2000;
-// Radians per frame: one full turn in about 35 seconds at 60 frames a second.
-const SPIN = 0.003;
 // cobe loads its world map in the background and only shows it on a later redraw, so a
 // new globe keeps redrawing for this long even while paused.
 const SETTLE_MS = 1500;
@@ -105,9 +104,13 @@ export function GlobeArt({
   pausedRef.current = paused;
   useEffect(() => {
     let drawnTheta = NaN;
+    let lastFrame = performance.now();
     let frame = requestAnimationFrame(function draw(now) {
       const spinning = !pausedRef.current;
-      if (spinning && phi.current !== null) phi.current += SPIN;
+      if (spinning && phi.current !== null) {
+        phi.current += spinFor(now - lastFrame);
+      }
+      lastFrame = now;
       if (
         spinning ||
         now < settleUntil.current ||
