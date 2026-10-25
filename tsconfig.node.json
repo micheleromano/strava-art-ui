@@ -10,7 +10,9 @@
     "app/lib/activity.ts",
     "app/lib/strava.ts",
     "app/lib/trim-ends.ts",
-    "app/lib/shape.ts"
+    "app/lib/shape.ts",
+    "app/lib/places.ts",
+    "app/lib/layouts.ts"
   ],
   "compilerOptions": {
     "composite": true,

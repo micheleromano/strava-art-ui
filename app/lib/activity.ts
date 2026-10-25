@@ -4,4 +4,9 @@ export type Activity = {
   startDate: string;
   /** Google encoded polyline; empty when the activity has no map. */
   polyline: string;
+  /**
+   * Only in the owner's sample, whose polylines are shapes with no real position:
+   * where it happened, rounded to about 25 km (see placeOf), so the sample can show a globe.
+   */
+  place?: [number, number];
 };

@@ -26,6 +26,7 @@ import { ColourControl } from "~/components/colour-control";
 import { DateRangeControl } from "~/components/date-range-control";
 import { LayoutPicker } from "~/components/layout-picker";
 import { PalettePicker } from "~/components/palette-picker";
+import { GlobeArt } from "~/components/globe-art";
 import { RouteArt } from "~/components/route-art";
 import { RouteList } from "~/components/route-list";
 import { SliderControl } from "~/components/slider-control";
@@ -38,6 +39,7 @@ import {
   makePng,
   screenPngSize,
   sharePng,
+  globePng,
 } from "~/lib/download";
 import { listRoutes } from "~/lib/listed-routes";
 import { platformFrom, type Platform } from "~/lib/platform";
@@ -48,12 +50,14 @@ import {
 } from "~/lib/load-activities";
 import {
   frameFor,
-  LAYOUTS,
+  ART_LAYOUTS,
   layoutRoutes,
   SQUARE,
-  type Layout,
+  type ArtLayout,
 } from "~/lib/layouts";
+import { defaultTilt } from "~/lib/globe";
 import { PALETTES } from "~/lib/palettes";
+import { countPlaces, placeOf } from "~/lib/places";
 import { shadeRamp } from "~/lib/shades";
 import { sampleActivities } from "~/lib/sample.server";
 import { sessionFrom } from "~/lib/session.server";
@@ -66,8 +70,6 @@ const SQUARE_PNG_SIZE = 2048;
 const PNG_FILENAME = "route-art.png";
 // The same trim the sample data gets, applied to people's own routes when they ask for it.
 const TRIM_METRES = 500;
-const MAX_GRID = 10;
-const DEFAULT_GRID = 4;
 
 export function meta() {
   return [{ title: `${i18n.t("studio.title")} · ${i18n.t("app.name")}` }];
@@ -141,7 +143,6 @@ export default function Studio({
   const [hideEnds, setHideEnds] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [strokeWidth, setStrokeWidth] = useState(2);
-  const [spacing, setSpacing] = useState(0.15);
   // Keyed by each route's stable id, so they stay with the right route after a refresh.
   const [rotations, setRotations] = useState<Record<string, number>>({});
   const [rotatingId, setRotatingId] = useState<string | null>(null);
@@ -157,15 +158,21 @@ export default function Studio({
     [matchScreen, screenWidth, screenHeight],
   );
   const svgRef = useRef<SVGSVGElement>(null);
+  const globeRef = useRef<HTMLCanvasElement | null>(null);
+  const [transparent, setTransparent] = useState(true);
+  // null until someone moves the tilt slider: until then it follows the busiest place.
+  const [chosenTilt, setChosenTilt] = useState<number | null>(null);
 
   // What's drawn lives in the URL, so a link brings back the same picture; the look stays on the page.
   const timeZone = getLocalTimeZone();
   const from = searchParams.get("from");
   const to = searchParams.get("to");
   const range = rangeFromParams(from, to, timeZone, activities);
-  const layout = layoutFrom(searchParams.get("layout"));
-  const columns = gridSizeFrom(searchParams.get("columns"));
-  const rows = gridSizeFrom(searchParams.get("rows"));
+  // The globe needs places: people's own routes have real ones, and the sample has
+  // rounded ones if the owner's sample file includes them.
+  const globeAvailable =
+    source === "strava" || activities.some((activity) => activity.place);
+  const layout = layoutFrom(searchParams.get("layout"), globeAvailable);
 
   // Decoding routes is the slow part, so it only reruns when the activities or dates change.
   const { drawable, skipped } = useMemo(() => {
@@ -184,9 +191,10 @@ export default function Studio({
       source === "strava" && hideEnds ? TRIM_METRES : 0,
       (startDate) => dateFormat.format(new Date(startDate)),
     );
-    const drawable = routes.map(({ id, date, sameDay, route }) => ({
+    const drawable = routes.map(({ id, date, sameDay, route, place }) => ({
       id,
       route,
+      place,
       label:
         sameDay.count > 1
           ? i18n.t("studio.routes.sameDay", { date, ...sameDay })
@@ -201,13 +209,31 @@ export default function Studio({
 
   const paths = useMemo(
     () =>
-      layoutRoutes(
-        included.map(({ route }) => route),
-        { layout, frame, zoom, columns, rows, spacing },
-        included.map(({ id }) => rotations[id] ?? 0),
-      ),
-    [included, layout, frame, zoom, columns, rows, spacing, rotations],
+      layout === "globe"
+        ? []
+        : layoutRoutes(
+            included.map(({ route }) => route),
+            { layout, frame, zoom },
+            included.map(({ id }) => rotations[id] ?? 0),
+          ),
+    [included, layout, frame, zoom, rotations],
   );
+  // Rounded to about 25 km before they reach the globe; exact points never do.
+  const places = useMemo(
+    () =>
+      layout === "globe"
+        ? countPlaces(
+            included.flatMap(({ route, place }) => {
+              // The sample stores rounded places; people's own routes are rounded here.
+              const location = place ?? placeOf(route);
+              return location ? [location] : [];
+            }),
+          )
+        : [],
+    [included, layout],
+  );
+  const drawnCount = layout === "globe" ? places.length : paths.length;
+  const tilt = chosenTilt ?? defaultTilt(places);
 
   // Stable callbacks, so the route list only redraws the row that changed.
   const showRoute = useCallback(
@@ -262,8 +288,28 @@ export default function Studio({
   // A new object whenever anything that's drawn changes, so a finished PNG (and the
   // message about it) only counts for the picture it was made from.
   const picture = useMemo(
-    () => ({ paths, backgroundHex, lineHex, shades, strokeWidth, frame }),
-    [paths, backgroundHex, lineHex, shades, strokeWidth, frame],
+    () => ({
+      paths,
+      places,
+      backgroundHex,
+      lineHex,
+      shades,
+      strokeWidth,
+      frame,
+      transparent,
+      tilt,
+    }),
+    [
+      paths,
+      places,
+      backgroundHex,
+      lineHex,
+      shades,
+      strokeWidth,
+      frame,
+      transparent,
+      tilt,
+    ],
   );
   const current = exported?.picture === picture ? exported : null;
   const making = current?.status === "making";
@@ -271,13 +317,22 @@ export default function Studio({
     ? screenPngSize(screenWidth, screenHeight, pixelRatio)
     : { width: SQUARE_PNG_SIZE, height: SQUARE_PNG_SIZE };
 
-  const exportPng = async (svg: SVGSVGElement, how: ExportState["how"]) => {
+  const makeCurrentPng = (): Promise<Blob> => {
+    if (layout === "globe") {
+      if (!globeRef.current) throw new Error("The globe isn't drawn yet");
+      return globePng(globeRef.current, transparent ? null : backgroundHex);
+    }
+    if (!svgRef.current) throw new Error("The picture isn't drawn yet");
+    return makePng(svgRef.current, pngSize.width, pngSize.height);
+  };
+
+  const exportPng = async (how: ExportState["how"]) => {
     // Reuse a PNG made on an earlier tap: phones only open the share menu right after a tap.
     let png = current?.png;
     setExported({ status: "making", how, picture, png });
     if (!png) {
       try {
-        png = await makePng(svg, pngSize.width, pngSize.height);
+        png = await makeCurrentPng();
       } catch {
         setExported({ status: "failed", how, picture });
         return;
@@ -341,72 +396,70 @@ export default function Studio({
           <LayoutPicker
             value={layout}
             onChange={(next) => setParams({ layout: next })}
+            unavailable={globeAvailable ? [] : ["globe"]}
+            unavailableReason={t("studio.globe.sampleUnavailable")}
           />
 
-          <div className="flex flex-col gap-1">
-            <Checkbox
-              isSelected={matchScreen}
-              onChange={setMatchScreen}
-              aria-describedby="screen-size"
-            >
-              <Checkbox.Content>
-                {/* A border keeps the unticked box visible on light backgrounds. */}
-                <Checkbox.Control className="border border-foreground/50">
-                  <Checkbox.Indicator />
-                </Checkbox.Control>
-                {t("studio.matchScreen")}
-              </Checkbox.Content>
-            </Checkbox>
-            <p id="screen-size" className="text-sm text-muted">
-              {t("studio.matchScreenSize", {
-                ...screenPngSize(screenWidth, screenHeight, pixelRatio),
-              })}
-            </p>
-          </div>
+          {layout !== "globe" && (
+            <div className="flex flex-col gap-1">
+              <Checkbox
+                isSelected={matchScreen}
+                onChange={setMatchScreen}
+                aria-describedby="screen-size"
+              >
+                <Checkbox.Content>
+                  {/* A border keeps the unticked box visible on light backgrounds. */}
+                  <Checkbox.Control className="border border-foreground/50">
+                    <Checkbox.Indicator />
+                  </Checkbox.Control>
+                  {t("studio.matchScreen")}
+                </Checkbox.Content>
+              </Checkbox>
+              <p id="screen-size" className="text-sm text-muted">
+                {t("studio.matchScreenSize", {
+                  ...screenPngSize(screenWidth, screenHeight, pixelRatio),
+                })}
+              </p>
+            </div>
+          )}
 
           {source === "strava" && (
             <div className="flex flex-col gap-2">
               <p className="text-sm text-muted">
                 {t(`studio.privacy.${layout}`)}
               </p>
-              <Switch isSelected={hideEnds} onChange={setHideEnds}>
-                <Switch.Content>
-                  <Switch.Control>
-                    <Switch.Thumb />
-                  </Switch.Control>
-                  {t("studio.hideEnds")}
-                </Switch.Content>
-              </Switch>
+              {layout !== "globe" && (
+                <Switch isSelected={hideEnds} onChange={setHideEnds}>
+                  <Switch.Content>
+                    <Switch.Control>
+                      <Switch.Thumb />
+                    </Switch.Control>
+                    {t("studio.hideEnds")}
+                  </Switch.Content>
+                </Switch>
+              )}
             </div>
           )}
 
-          {layout === "grid" ? (
-            <div className="flex flex-col gap-4">
+          {layout === "globe" && (
+            <div className="flex flex-col gap-1">
               <SliderControl
-                label={t("studio.columns")}
-                value={columns}
-                minValue={1}
-                maxValue={MAX_GRID}
-                onChange={(value) => setParams({ columns: String(value) })}
+                label={t("studio.globe.tilt")}
+                value={tilt}
+                minValue={-90}
+                maxValue={90}
+                formatOptions={{
+                  style: "unit",
+                  unit: "degree",
+                  unitDisplay: "narrow",
+                }}
+                onChange={setChosenTilt}
               />
-              <SliderControl
-                label={t("studio.rows")}
-                value={rows}
-                minValue={1}
-                maxValue={MAX_GRID}
-                onChange={(value) => setParams({ rows: String(value) })}
-              />
-              <SliderControl
-                label={t("studio.spacing")}
-                value={spacing}
-                minValue={0}
-                maxValue={0.6}
-                step={0.05}
-                formatOptions={{ style: "percent" }}
-                onChange={setSpacing}
-              />
+              <p className="text-sm text-muted">{t("studio.globe.tiltHelp")}</p>
             </div>
-          ) : (
+          )}
+
+          {layout !== "globe" && (
             <SliderControl
               label={t("studio.zoom")}
               value={zoom}
@@ -417,13 +470,15 @@ export default function Studio({
               onChange={setZoom}
             />
           )}
-          <SliderControl
-            label={t("studio.thickness")}
-            value={strokeWidth}
-            minValue={1}
-            maxValue={10}
-            onChange={setStrokeWidth}
-          />
+          {layout !== "globe" && (
+            <SliderControl
+              label={t("studio.thickness")}
+              value={strokeWidth}
+              minValue={1}
+              maxValue={10}
+              onChange={setStrokeWidth}
+            />
+          )}
 
           <DateRangeControl
             label={t("studio.dates")}
@@ -442,6 +497,7 @@ export default function Studio({
               onShowAll={showAllRoutes}
               onRotatingChange={setRotatingId}
               onRotate={rotateRoute}
+              canRotate={layout !== "globe"}
             />
           )}
 
@@ -464,16 +520,20 @@ export default function Studio({
               value={line}
               onChange={setLine}
             />
-            <Switch isSelected={shades} onChange={setShades}>
-              <Switch.Content>
-                <Switch.Control>
-                  <Switch.Thumb />
-                </Switch.Control>
-                {t("studio.shades")}
-              </Switch.Content>
-            </Switch>
-            {shades && (
-              <p className="text-sm text-muted">{t("studio.shadesHelp")}</p>
+            {layout !== "globe" && (
+              <>
+                <Switch isSelected={shades} onChange={setShades}>
+                  <Switch.Content>
+                    <Switch.Control>
+                      <Switch.Thumb />
+                    </Switch.Control>
+                    {t("studio.shades")}
+                  </Switch.Content>
+                </Switch>
+                {shades && (
+                  <p className="text-sm text-muted">{t("studio.shadesHelp")}</p>
+                )}
+              </>
             )}
           </div>
 
@@ -488,10 +548,10 @@ export default function Studio({
 
           <div aria-live="polite" className="flex flex-col gap-1 text-sm">
             <p>
-              {paths.length < included.length
-                ? t("studio.gridShown", {
-                    count: paths.length,
-                    total: included.length,
+              {layout === "globe"
+                ? t("studio.globe.shown", {
+                    count: places.length,
+                    routes: included.length,
                   })
                 : t("studio.shown", { count: paths.length })}
             </p>
@@ -509,41 +569,55 @@ export default function Studio({
             )}
           </div>
 
+          {layout === "globe" && (
+            <Checkbox isSelected={transparent} onChange={setTransparent}>
+              <Checkbox.Content>
+                {/* A border keeps the unticked box visible on light backgrounds. */}
+                <Checkbox.Control className="border border-foreground/50">
+                  <Checkbox.Indicator />
+                </Checkbox.Control>
+                {t("studio.globe.transparent")}
+              </Checkbox.Content>
+            </Checkbox>
+          )}
+
           <div className="flex flex-wrap gap-2">
             <Button
-              isDisabled={paths.length === 0 || making}
+              isDisabled={drawnCount === 0 || making}
               isPending={making && current?.how === "download"}
-              onPress={() =>
-                svgRef.current && exportPng(svgRef.current, "download")
-              }
+              onPress={() => exportPng("download")}
             >
               {t("studio.downloadPng")}
             </Button>
             {canShare && (
               <Button
                 variant="secondary"
-                isDisabled={paths.length === 0 || making}
+                isDisabled={drawnCount === 0 || making}
                 isPending={making && current?.how === "share"}
-                onPress={() =>
-                  svgRef.current && exportPng(svgRef.current, "share")
-                }
+                onPress={() => exportPng("share")}
               >
                 {t("studio.sharePng")}
               </Button>
             )}
-            <Button
-              variant="secondary"
-              isDisabled={paths.length === 0}
-              onPress={() =>
-                svgRef.current && downloadSvg(svgRef.current, "route-art.svg")
-              }
-            >
-              {t("studio.downloadSvg")}
-            </Button>
+            {layout !== "globe" && (
+              <Button
+                variant="secondary"
+                isDisabled={paths.length === 0}
+                onPress={() =>
+                  svgRef.current && downloadSvg(svgRef.current, "route-art.svg")
+                }
+              >
+                {t("studio.downloadSvg")}
+              </Button>
+            )}
           </div>
 
           {canShare && source === "strava" && (
-            <p className="text-sm text-muted">{t("studio.shareNote")}</p>
+            <p className="text-sm text-muted">
+              {layout === "globe"
+                ? t("studio.globe.shareNote")
+                : t("studio.shareNote")}
+            </p>
           )}
 
           {/* Always present, so screen readers announce each result as it appears. */}
@@ -555,7 +629,8 @@ export default function Studio({
               <ExportMessage
                 status={current.status}
                 platform={platform}
-                square={!matchScreen}
+                // The globe is always square, but it isn't meant as a wallpaper.
+                square={!matchScreen && layout !== "globe"}
               />
             )}
           </div>
@@ -585,7 +660,7 @@ export default function Studio({
         </section>
 
         <section className="max-w-3xl">
-          {paths.length === 0 ? (
+          {drawnCount === 0 ? (
             <p className="rounded-lg border border-border p-8 text-center text-muted">
               {emptyMessage(t, {
                 activities: activities.length,
@@ -594,6 +669,19 @@ export default function Studio({
                 skipped,
               })}
             </p>
+          ) : layout === "globe" ? (
+            <GlobeArt
+              canvasRef={globeRef}
+              places={places}
+              background={backgroundHex}
+              dot={lineHex}
+              showBackground={!transparent}
+              tilt={tilt}
+              label={t("studio.artLabel.globe", {
+                count: places.length,
+                routes: included.length,
+              })}
+            />
           ) : (
             <RouteArt
               ref={svgRef}
@@ -704,15 +792,9 @@ function emptyMessage(
   return t("studio.empty");
 }
 
-function layoutFrom(value: string | null): Layout {
-  return LAYOUTS.find((layout) => layout === value) ?? "start";
-}
-
-function gridSizeFrom(value: string | null): number {
-  const size = Number(value);
-  return Number.isInteger(size) && size >= 1 && size <= MAX_GRID
-    ? size
-    : DEFAULT_GRID;
+function layoutFrom(value: string | null, globeAvailable: boolean): ArtLayout {
+  const layout = ART_LAYOUTS.find((known) => known === value) ?? "start";
+  return layout === "globe" && !globeAvailable ? "start" : layout;
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

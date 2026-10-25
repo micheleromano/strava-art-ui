@@ -6,6 +6,7 @@ import {
   decodeRoutes,
   frameFor,
   layoutRoutes,
+  previewPath,
   SQUARE,
   type LayoutOptions,
   type Route,
@@ -15,9 +16,6 @@ const options: LayoutOptions = {
   layout: "start",
   frame: SQUARE,
   zoom: 1,
-  columns: 2,
-  rows: 2,
-  spacing: 0.1,
 };
 
 const points = (path: string) =>
@@ -111,11 +109,10 @@ describe("rotation", () => {
     expect(points(unturned)[1][1]).toBeLessThan(ART_SIZE / 2);
   });
 
-  it("refits a turned route to its grid square", () => {
-    const grid = { ...options, layout: "grid" as const };
-    const [[x1, y1], [x2, y2]] = points(layoutRoutes([north], grid, [90])[0]);
-    // Now horizontal, it spans the square's width (90% of 500) instead of its height.
-    expect(Math.abs(x2 - x1)).toBeCloseTo(450, 0);
+  it("refits a turned route to its preview square", () => {
+    const [[x1, y1], [x2, y2]] = points(previewPath(north, 90));
+    // Now horizontal, it spans 85% of the square's width instead of its height.
+    expect(Math.abs(x2 - x1)).toBeCloseTo(850, 0);
     expect(y2).toBeCloseTo(y1, 0);
   });
 });
@@ -162,7 +159,7 @@ describe("chain", () => {
 describe("screen-shaped frames", () => {
   const wide = frameFor(1920, 1080);
   const tall = frameFor(1170, 2532);
-  const routes = [london, paris, london, paris];
+  const routes = [london, paris];
 
   it("keeps the short side and stretches the long side to the screen's proportions", () => {
     expect(wide).toEqual({ width: 1778, height: ART_SIZE });
@@ -186,17 +183,6 @@ describe("screen-shaped frames", () => {
     }
   });
 
-  it("spreads grid cells across the whole width of a wide picture", () => {
-    const [, second] = layoutRoutes(routes, {
-      ...options,
-      layout: "grid",
-      frame: wide,
-    }).map(points);
-    inside(second);
-    // 2 columns of 889: the second route sits in the right-hand cell.
-    for (const [x] of second) expect(x).toBeGreaterThanOrEqual(wide.width / 2);
-  });
-
   it("centres the chain in a wide picture", () => {
     const drawn = layoutRoutes(routes, {
       ...options,
@@ -207,43 +193,5 @@ describe("screen-shaped frames", () => {
     const xs = drawn.map(([x]) => x);
     const middle = (Math.min(...xs) + Math.max(...xs)) / 2;
     expect(middle).toBeCloseTo(wide.width / 2, 0);
-  });
-
-  it("splits a tall picture into taller grid cells", () => {
-    const [, second] = layoutRoutes(routes, {
-      ...options,
-      layout: "grid",
-      frame: tall,
-    }).map(points);
-    // With 2 × 2 cells, the second route sits in the top-right cell: x ≥ 500, y < 1082.
-    for (const [x, y] of second) {
-      expect(x).toBeGreaterThanOrEqual(ART_SIZE / 2);
-      expect(y).toBeLessThanOrEqual(tall.height / 2);
-    }
-  });
-});
-
-describe("grid", () => {
-  const grid = { ...options, layout: "grid" as const };
-
-  it("draws only as many routes as there are cells, starting with the first", () => {
-    const routes = Array.from({ length: 6 }, () => london);
-    expect(layoutRoutes(routes, grid)).toHaveLength(4);
-  });
-
-  it("fills each route's own cell", () => {
-    const [first, second] = layoutRoutes([london, paris], grid).map(points);
-    const extent = (values: number[]) =>
-      Math.max(...values) - Math.min(...values);
-    const span = (path: number[][]) =>
-      Math.max(extent(path.map(([x]) => x)), extent(path.map(([, y]) => y)));
-    // Cells are 500 square; with 10% spacing each route's longer side spans 450.
-    expect(span(first)).toBeCloseTo(450, 0);
-    expect(span(second)).toBeCloseTo(450, 0);
-    // The second route sits in the top-right cell.
-    for (const [x, y] of second) {
-      expect(x).toBeGreaterThanOrEqual(500);
-      expect(y).toBeLessThanOrEqual(500);
-    }
   });
 });

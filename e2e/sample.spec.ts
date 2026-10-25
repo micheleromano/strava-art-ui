@@ -55,17 +55,17 @@ test("each layout draws the routes and downloads what's on screen", async ({
 }) => {
   await page.goto(`/studio?source=sample&${SEPTEMBER}`);
 
-  await page.getByRole("radio", { name: "Grid" }).click();
+  await page.getByRole("radio", { name: "End to end" }).click();
+  await expect(
+    page.getByRole("img", { name: /^5 routes joined end to end/ }),
+  ).toBeVisible();
+
+  // Links from when there was a Grid layout fall back to the first layout.
+  await page.goto(`/studio?source=sample&${SEPTEMBER}&layout=grid&columns=2`);
   await expect(
     page.getByRole("img", {
-      name: "5 routes drawn in a grid, one per square.",
+      name: /^5 routes drawn from the same starting point/,
     }),
-  ).toBeVisible();
-  await page.goto(
-    `/studio?source=sample&${SEPTEMBER}&layout=grid&columns=2&rows=2`,
-  );
-  await expect(
-    page.getByText("Showing the latest 4 of 5 routes in these dates."),
   ).toBeVisible();
 
   await page.getByRole("radio", { name: "Paper" }).click();
@@ -80,14 +80,14 @@ test("each layout draws the routes and downloads what's on screen", async ({
       }),
   );
   expect(markup).toContain('fill="#f5f0e6"');
-  expect(markup.match(/<path /g)).toHaveLength(4);
+  expect(markup.match(/<path /g)).toHaveLength(5);
 });
 
 test("someone can rotate a route, and leave routes out of the picture", async ({
   page,
 }) => {
-  await page.goto(`/studio?source=sample&${SEPTEMBER}&layout=grid`);
-  const art = page.getByRole("img", { name: /drawn in a grid/ });
+  await page.goto(`/studio?source=sample&${SEPTEMBER}`);
+  const art = page.getByRole("img", { name: /same starting point/ });
   const firstPath = () => art.locator("path").first().getAttribute("d");
   const before = await firstPath();
 

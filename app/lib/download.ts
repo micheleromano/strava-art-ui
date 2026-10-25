@@ -72,6 +72,32 @@ export async function makePng(
   }
 }
 
+/**
+ * A PNG of the globe's canvas, as drawn. With a `background` colour it's filled in behind
+ * the globe; without one the PNG keeps a transparent background, ready to put on a website.
+ */
+export async function globePng(
+  canvas: HTMLCanvasElement,
+  background: string | null,
+): Promise<Blob> {
+  const output = document.createElement("canvas");
+  output.width = canvas.width;
+  output.height = canvas.height;
+  const context = output.getContext("2d");
+  if (!context) throw new Error("Couldn't create a canvas this size");
+  if (background) {
+    context.fillStyle = background;
+    context.fillRect(0, 0, output.width, output.height);
+  }
+  context.drawImage(canvas, 0, 0);
+  return new Promise<Blob>((resolve, reject) =>
+    output.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("PNG export failed"))),
+      "image/png",
+    ),
+  );
+}
+
 export function downloadPng(png: Blob, filename: string) {
   saveBlob(png, filename);
 }
