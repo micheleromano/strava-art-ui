@@ -160,8 +160,8 @@ export default function Studio({
   const svgRef = useRef<SVGSVGElement>(null);
   const globeRef = useRef<HTMLCanvasElement | null>(null);
   const [transparent, setTransparent] = useState(true);
-  // null until someone moves the tilt slider: until then it follows the busiest place.
-  const [chosenTilt, setChosenTilt] = useState<number | null>(null);
+  // Starts toward the busiest place the first time there are places, then stays put.
+  const [tilt, setTilt] = useState<number | null>(null);
 
   // What's drawn lives in the URL, so a link brings back the same picture; the look stays on the page.
   const timeZone = getLocalTimeZone();
@@ -233,7 +233,9 @@ export default function Studio({
     [included, layout],
   );
   const drawnCount = layout === "globe" ? places.length : paths.length;
-  const tilt = chosenTilt ?? defaultTilt(places);
+  // Set during render, once, rather than in an effect (React's "adjusting state" pattern).
+  if (tilt === null && places.length > 0) setTilt(defaultTilt(places));
+  const shownTilt = tilt ?? defaultTilt(places);
 
   // Stable callbacks, so the route list only redraws the row that changed.
   const showRoute = useCallback(
@@ -297,7 +299,7 @@ export default function Studio({
       strokeWidth,
       frame,
       transparent,
-      tilt,
+      tilt: shownTilt,
     }),
     [
       paths,
@@ -308,7 +310,7 @@ export default function Studio({
       strokeWidth,
       frame,
       transparent,
-      tilt,
+      shownTilt,
     ],
   );
   const current = exported?.picture === picture ? exported : null;
@@ -445,7 +447,7 @@ export default function Studio({
             <div className="flex flex-col gap-1">
               <SliderControl
                 label={t("studio.globe.tilt")}
-                value={tilt}
+                value={shownTilt}
                 minValue={-90}
                 maxValue={90}
                 formatOptions={{
@@ -453,7 +455,7 @@ export default function Studio({
                   unit: "degree",
                   unitDisplay: "narrow",
                 }}
-                onChange={setChosenTilt}
+                onChange={setTilt}
               />
               <p className="text-sm text-muted">{t("studio.globe.tiltHelp")}</p>
             </div>
@@ -676,7 +678,7 @@ export default function Studio({
               background={backgroundHex}
               dot={lineHex}
               showBackground={!transparent}
-              tilt={tilt}
+              tilt={shownTilt}
               label={t("studio.artLabel.globe", {
                 count: places.length,
                 routes: included.length,

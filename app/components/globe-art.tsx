@@ -47,7 +47,8 @@ export function GlobeArt({
   const { t } = useTranslation();
   const globeRef = useRef<Globe | null>(null);
   const settleUntil = useRef(0);
-  const phi = useRef(0);
+  // Set when the globe first appears, then kept: changing dates or routes doesn't turn it.
+  const phi = useRef<number | null>(null);
   // Read on every frame, so the spin and the tilt combine.
   const theta = useRef(tiltAngle(tilt));
   theta.current = tiltAngle(tilt);
@@ -57,16 +58,13 @@ export function GlobeArt({
     () => matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
 
-  // Turn the busiest place to face the viewer whenever the places change.
-  useEffect(() => {
-    if (places[0]) phi.current = spinFacing(places[0].location);
-  }, [places]);
-
   // cobe draws on the canvas outside React, so this connects the two: create the globe,
   // and destroy it when the places or colours change or the globe goes away.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    // The first time, start with the busiest place facing the viewer.
+    phi.current ??= places[0] ? spinFacing(places[0].location) : 0;
     const across = canvas.clientWidth || 1000;
     const globe = createGlobe(canvas, {
       width: across,
@@ -109,13 +107,16 @@ export function GlobeArt({
     let drawnTheta = NaN;
     let frame = requestAnimationFrame(function draw(now) {
       const spinning = !pausedRef.current;
-      if (spinning) phi.current += SPIN;
+      if (spinning && phi.current !== null) phi.current += SPIN;
       if (
         spinning ||
         now < settleUntil.current ||
         theta.current !== drawnTheta
       ) {
-        globeRef.current?.update({ phi: phi.current, theta: theta.current });
+        globeRef.current?.update({
+          phi: phi.current ?? 0,
+          theta: theta.current,
+        });
         drawnTheta = theta.current;
       }
       frame = requestAnimationFrame(draw);
