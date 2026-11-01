@@ -2,7 +2,7 @@
 
 Turn the routes from your Strava activities into a picture you can download.
 
-**Try it:** https://route-art.micheleromano.workers.dev. Use the sample routes without signing in, or connect your own Strava account.
+**Live:** [route-art.micheleromano.workers.dev](https://route-art.micheleromano.workers.dev). Try it with sample routes, no sign-in needed, or connect your own Strava account.
 
 ![The Globe layout: a pale pink globe with a dark red dot for each area the creator has been active in, mostly across North America.](docs/screenshots/globe.png)
 
@@ -15,7 +15,7 @@ Turn the routes from your Strava activities into a picture you can download.
   - **End to end:** each route starts where the one before it finished, oldest first, turned so they all fit.
   - **Globe:** a globe with a dot for each area you've been active in. You can tilt it north or south, and spin it at the speed you choose.
 - **Choose your routes**
-  - Pick a date range.
+  - Pick a date range, for example only last month's.
   - Untick individual routes to leave them out.
   - Rotate any route on its own.
 - **Colours:** eight ready-made colour combinations, each checked for contrast. You can also pick your own colours, or use shades of one colour from newest to oldest.
@@ -25,11 +25,11 @@ Turn the routes from your Strava activities into a picture you can download.
   - On the Globe, the PNG can have a transparent background, for putting on a website.
   - On phones, "Share or save picture" sends it to the share menu.
 
-## Privacy
+## Privacy by design
 
 The app keeps as little as it can, and says what it keeps.
 
-- **Your Strava activities:** only each activity's date and route line are kept, and only in your browser. They pass through the app's server on the way, but aren't stored there.
+- **Your Strava activities:** only each activity's date and route line are kept, and only in your browser (IndexedDB). They pass through the app's server on the way, but aren't stored there.
 - **Signing in:** a sign-in cookie keeps you connected until you close your browser. **Disconnect** withdraws the app's access on Strava and removes your activities from the browser.
 - **What pictures can show:**
   - By default, the first and last 500 metres of each route are hidden, since a route's start is often someone's home.
@@ -40,7 +40,9 @@ The app keeps as little as it can, and says what it keeps.
   - each route is stored as a shape, with no real coordinates;
   - the only position kept is a rounded area for the Globe.
 
-## How it's built
+## Stack
+
+TypeScript · React · React Router (framework mode) · Vite · Cloudflare Workers · HeroUI + Tailwind CSS v4 · cobe · react-i18next · Strava OAuth 2.0 · Vitest + Testing Library · Playwright (end to end, Strava mocked) · ESLint · Prettier · pnpm
 
 - **App:** [React Router](https://reactrouter.com) (framework mode) on [Cloudflare Workers](https://workers.cloudflare.com).
 - **Interface:** [HeroUI](https://heroui.com) and Tailwind CSS, with light and dark mode.
@@ -48,6 +50,14 @@ The app keeps as little as it can, and says what it keeps.
 - **Strava:** sign-in uses OAuth. Strava tokens stay in an httpOnly cookie and never reach the page's JavaScript.
 - **Accessibility:** aims for WCAG 2.2 AA, with plain-language copy.
 - **Translations:** every piece of text is in `app/locales/en.json`, ready to be translated.
+
+## How it was built
+
+- **Setup:** set up with [agent-scaffold](https://github.com/micheleromano/agent-scaffold) and built by directing Claude Code.
+- **`AGENTS.md`:** holds the stack, commands and conventions every agent follows. The `.claude/` folder adds rules, review subagents and a hook that blocks destructive commands.
+- **Checks:** the type check, lint, unit tests and end-to-end tests gate every change. GitHub Actions runs them on each pull request, and `main` only accepts pull requests that pass.
+- **Reviews:** humane-design and security reviews checked the work as it grew.
+- **Deploys:** each one needs a person's go-ahead.
 
 ## Running it locally
 
@@ -59,7 +69,11 @@ You need Node.js and pnpm. Corepack, which comes with Node, can set up the right
    pnpm install
    ```
 2. Create a Strava app at https://www.strava.com/settings/api, with `localhost` as the Authorization Callback Domain.
-3. Copy `.dev.vars.example` to `.dev.vars`. Add the app's Client ID and Client Secret, and a session secret from `openssl rand -base64 32`. `.dev.vars` is gitignored, so never commit it.
+3. Copy the example secrets file:
+   ```sh
+   cp .dev.vars.example .dev.vars
+   ```
+   Add the app's Client ID and Client Secret, and a session secret from `openssl rand -base64 32`. `.dev.vars` is gitignored, so never commit it.
 4. Start the app at http://localhost:5173:
    ```sh
    pnpm dev
@@ -81,7 +95,6 @@ The sample routes come from `app/data/demo-activities.json`. It's gitignored, an
 | Deploy           | `pnpm run deploy` |
 
 - **End-to-end tests** run against a production build, with a stand-in for Strava, so they need no secrets.
-- **GitHub Actions** runs the type check, lint and every test on each pull request, and `main` only accepts changes through pull requests that pass.
 
 ## Strava
 
